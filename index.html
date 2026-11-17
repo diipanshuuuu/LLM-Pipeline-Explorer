@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Pipeline Explainer: Under the Hood</title>
+  
+  <link rel="stylesheet" href="css/styles.css?v=8">
+
+  <!-- Local 3D Engine Scripts (Zero CDN Dependencies) -->
+  <script src="js/three.min.js?v=8"></script>
+  <script src="js/OrbitControls.js?v=8"></script>
+</head>
+<body>
+
+  <!-- ============================================================== -->
+  <!-- SLIM STICKY HEADER                                             -->
+  <!-- ============================================================== -->
+  <header class="slim-header">
+    <div class="header-content">
+      
+      <!-- Brand Title -->
+      <div class="brand">
+        <div class="brand-badge">&Delta;</div>
+        <div class="brand-info">
+          <h1 class="brand-title">LLM Pipeline Explainer</h1>
+          <p class="brand-sub">Under the Hood: How Transformers Think</p>
+        </div>
+      </div>
+
+      <!-- Real-Time Prompt Input Box -->
+      <div class="header-prompt-wrap">
+        <input type="text" id="promptInput" class="header-prompt-input" value="The quick brown fox jumps over the" placeholder="Type any sentence to see the LLM process it in real time...">
+        <div id="tokenCountBadge" class="token-count-pill">7 Tokens</div>
+      </div>
+
+      <!-- Header Primary Actions -->
+      <div class="header-actions">
+        <button class="btn btn-primary" onclick="if(window.app) window.app.sampleAndAppendToken()">
+          <span>✨ Generate Next Word</span>
+        </button>
+        <button id="btnAutoPlay" class="btn btn-secondary" onclick="if(window.app) window.app.toggleAutoPlay()">
+          <span>&#9658; Auto-Play</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Subtle Preset Sentence Suggestions -->
+    <div class="header-presets-row">
+      <span class="preset-label">Try:</span>
+      <button class="preset-pill" onclick="if(window.app) window.app.setPrompt('The quick brown fox jumps over the')">"The quick brown fox jumps over the"</button>
+      <button class="preset-pill" onclick="if(window.app) window.app.setPrompt('Attention is all you need for deep learning')">"Attention is all you need"</button>
+      <button class="preset-pill" onclick="if(window.app) window.app.setPrompt('Large language models predict the next')">"Large language models predict"</button>
+      <button class="preset-pill" onclick="if(window.app) window.app.setPrompt('In a galaxy far far away the stars')">"In a galaxy far far away"</button>
+    </div>
+  </header>
+
+  <!-- ============================================================== -->
+  <!-- 2-COLUMN APP LAYOUT                                            -->
+  <!-- ============================================================== -->
+  <div class="app-layout">
+    
+    <!-- Left Sidebar: 7 Guided Stages Progress List -->
+    <aside class="stages-sidebar">
+      <div class="sidebar-label">Pipeline Stages</div>
+      <nav class="sidebar-nav" id="sidebarNav">
+        <!-- Rendered dynamically by app.renderSidebar() -->
+      </nav>
+    </aside>
+
+    <!-- Right Main Stage Area: Active Stage Display -->
+    <main class="stage-main-area">
+      <div id="activeStageContainer">
+        <!-- Currently active stage rendered dynamically -->
+      </div>
+    </main>
+
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- FOOTER: Parameter & Memory Calculator (Collapsible)           -->
+  <!-- ============================================================== -->
+  <footer class="app-footer">
+    <div class="footer-inner">
+      <details class="stage-deep-dive" style="margin-top:0;">
+        <summary class="deep-dive-summary">
+          <span style="display:flex; align-items:center; gap:8px;">
+            <span>&#128187;</span>
+            <span style="font-weight:700;">Model Size & VRAM Memory Calculator</span>
+          </span>
+          <span style="font-size:12px; color:var(--text-muted);">&#9662; Expand</span>
+        </summary>
+        <div class="deep-dive-content">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+            <p style="color:var(--text-muted); font-size:13px;">Estimated parameter counts and GPU memory requirements for different LLM architectures:</p>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:12px; color:var(--text-muted);">Architecture:</span>
+              <select id="calcPresetSelect" onchange="if(window.app) window.app.updateVRAMCalculator()" style="padding:6px 10px; background:#0D1117; border:1px solid var(--border); border-radius:8px; color:var(--text-main); font-size:12px; font-family:'JetBrains Mono', monospace;">
+                <option value="custom">Active Visualizer Settings</option>
+                <option value="llama3-8b">LLaMA-3-8B (4096 dim, 32 layers)</option>
+                <option value="llama3-70b">LLaMA-3-70B (8192 dim, 80 layers)</option>
+                <option value="mistral-7b">Mistral-7B (4096 dim, 32 layers)</option>
+                <option value="gpt2">GPT-2 Small (768 dim, 12 layers)</option>
+              </select>
+            </div>
+          </div>
+          <div id="vramCalcContainer"></div>
+        </div>
+      </details>
+      <div style="text-align:center; font-size:12px; color:var(--text-dim); margin-top:16px;">
+        Interactive LLM Architecture Laboratory &bull; Runs 100% in your browser
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/vocabulary.js?v=8"></script>
+  <script src="js/math-engine.js?v=8"></script>
+  <script src="js/three-viewport.js?v=8"></script>
+  <script src="js/stages.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
+</body>
+</html>
