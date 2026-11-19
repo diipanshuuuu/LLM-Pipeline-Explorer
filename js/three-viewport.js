@@ -98,8 +98,10 @@ class VectorSpace3D {
     const { width, height } = this.getContainerSize();
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0D1117);
-    this.scene.fog = new THREE.FogExp2(0x0D1117, 0.016);
+    const isLight = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "light";
+    const bgHex = isLight ? 0x181816 : 0x0E0E0C;
+    this.scene.background = new THREE.Color(bgHex);
+    this.scene.fog = new THREE.FogExp2(bgHex, 0.015);
 
     this.camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
     this.camera.position.set(8.5, 6.2, 10.6);
@@ -145,20 +147,20 @@ class VectorSpace3D {
       this.controls.addEventListener("change", () => this.requestRender());
     }
 
-    // Warm/Cool 3-point lighting rig
-    const hemiLight = new THREE.HemisphereLight(0xBAE6FD, 0x1E293B, 0.85);
+    // Warm/Neutral 3-point lighting rig
+    const hemiLight = new THREE.HemisphereLight(0xFEF3C7, 0x1C1B18, 0.85);
     this.scene.add(hemiLight);
 
     const keyLight = new THREE.DirectionalLight(0xFFFBEB, 1.15);
     keyLight.position.set(6, 10, 7);
     this.scene.add(keyLight);
 
-    const rimLight = new THREE.DirectionalLight(0x60A5FA, 0.75);
+    const rimLight = new THREE.DirectionalLight(0xFB923C, 0.72);
     rimLight.position.set(-6, -4, -6);
     this.scene.add(rimLight);
 
     // Subtle spatial floor grid sized to match vector bounds
-    const gridHelper = new THREE.GridHelper(7.2, 16, 0x334155, 0x1E293B);
+    const gridHelper = new THREE.GridHelper(7.2, 16, 0x3D3B35, 0x24231F);
     gridHelper.position.y = -0.02;
     this.scene.add(gridHelper);
 
@@ -298,14 +300,14 @@ class VectorSpace3D {
     const origin = new THREE.Vector3(0, 0, 0);
 
     const palette = [
-      0x38BDF8, // Sky
+      0xFB923C, // Signal Orange
       0x34D399, // Emerald
-      0xFBBF24, // Amber
-      0xF472B6, // Pink
-      0xA78BFA, // Violet
+      0xFACC15, // Marigold Gold
+      0x38BDF8, // Cerulean Sky
+      0xA3E635, // Bright Lime
       0x2DD4BF, // Teal
-      0xFB7185, // Rose
-      0x60A5FA  // Blue
+      0xF87171, // Coral Red
+      0xF59E0B  // Warm Amber
     ];
 
     const sphereGeo = new THREE.SphereGeometry(0.18, 20, 20);
@@ -451,6 +453,19 @@ class VectorSpace3D {
     const mesh = this.nodeMeshes.find(m => m.userData.tokenIndex === index);
     if (mesh) {
       this.selectedTokens = [mesh];
+      this.refreshPairwiseArc();
+      this.requestRender();
+    }
+  }
+
+  selectPairByWords(wordA, wordB) {
+    if (!this.nodeMeshes || !wordA || !wordB) return;
+    const a = String(wordA).toLowerCase();
+    const b = String(wordB).toLowerCase();
+    const meshA = this.nodeMeshes.find(m => m.userData.token && m.userData.token.text.toLowerCase() === a);
+    const meshB = this.nodeMeshes.find(m => m.userData.token && m.userData.token.text.toLowerCase() === b);
+    if (meshA && meshB && meshA !== meshB) {
+      this.selectedTokens = [meshA, meshB];
       this.refreshPairwiseArc();
       this.requestRender();
     }
@@ -633,6 +648,15 @@ class VectorSpace3D {
       this.controls.reset();
     }
     this.fitCameraToScene();
+    this.requestRender();
+  }
+
+  setTheme(theme) {
+    if (!this.scene) return;
+    const isLight = theme === "light";
+    const bgHex = isLight ? 0x181816 : 0x0E0E0C;
+    this.scene.background = new THREE.Color(bgHex);
+    this.scene.fog = new THREE.FogExp2(bgHex, 0.015);
     this.requestRender();
   }
 

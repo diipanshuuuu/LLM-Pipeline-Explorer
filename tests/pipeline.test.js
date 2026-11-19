@@ -122,3 +122,134 @@ test('3D camera fit distance keeps full bounding sphere inside both axes across 
     assert.ok(visibleHalfW > radius * 1.2, `Horizontal frustum half-width must fit sphere at aspect ${aspect}`);
   }
 });
+
+test('Monotonic scroll-spy never jumps backward while scrolling downward through chapters', () => {
+  const { computeActiveStageFromLayout } = require('../js/story-helpers.js');
+
+  // Simulated document offsets for 7 chapters spaced 850px apart
+  const sectionDocTops = [
+    { stage: 1, docTop: 480 },
+    { stage: 2, docTop: 1330 },
+    { stage: 3, docTop: 2180 },
+    { stage: 4, docTop: 3030 },
+    { stage: 5, docTop: 3880 },
+    { stage: 6, docTop: 4730 },
+    { stage: 7, docTop: 5580 }
+  ];
+  const viewportH = 900;
+  const docH = 6500;
+
+  let prevStage = 1;
+  const visited = new Set();
+
+  for (let scrollY = 0; scrollY <= docH - viewportH; scrollY += 40) {
+    const metrics = sectionDocTops.map(s => ({ stage: s.stage, top: s.docTop - scrollY }));
+    const active = computeActiveStageFromLayout(metrics, viewportH, scrollY, docH);
+    assert.ok(
+      active >= prevStage,
+      `Scroll guide jumped backward from chapter ${prevStage} to ${active} at scrollY=${scrollY}`
+    );
+    prevStage = active;
+    visited.add(active);
+  }
+
+  for (let st = 1; st <= 7; st++) {
+    assert.ok(visited.has(st), `Expected chapter ${st} to become active while scrolling down`);
+  }
+});
+
+test('Prize wheel slices cover full 360 degrees and group overflow words cleanly', () => {
+  const { buildPrizeWheelSlices } = require('../js/story-helpers.js');
+
+  const candidates = [
+    { token: 'lazy', status: 'active', normalizedProb: 0.35 },
+    { token: 'dog', status: 'active', normalizedProb: 0.25 },
+    { token: 'fence', status: 'active', normalizedProb: 0.15 },
+    { token: 'river', status: 'active', normalizedProb: 0.10 },
+    { token: 'log', status: 'active', normalizedProb: 0.06 },
+    { token: 'cat', status: 'active', normalizedProb: 0.04 },
+    { token: 'grass', status: 'active', normalizedProb: 0.03 },
+    { token: 'moon', status: 'active', normalizedProb: 0.02 },
+    { token: 'sky', status: 'cut', normalizedProb: 0 }
+  ];
+
+  const slices = buildPrizeWheelSlices(candidates, 6);
+  assert.equal(slices.length, 7, 'Should include top 6 slices plus 1 grouped other slice');
+  assert.equal(slices[0].startAngle, 0);
+  assert.equal(slices[slices.length - 1].endAngle, 360);
+  assert.equal(slices[slices.length - 1].isOther, true);
+
+  for (let i = 1; i < slices.length; i++) {
+    assert.ok(Math.abs(slices[i].startAngle - slices[i - 1].endAngle) < 1e-6, 'Slices must be contiguous');
+  }
+});
+
+test('Color palettes exclude purple, violet, and magenta tones', () => {
+  const { WHEEL_SLICE_COLORS } = require('../js/story-helpers.js');
+  const { BACKGROUND_ANCHORS } = require('../js/vocabulary.js');
+
+  const isPurpleOrMagentaHex = (hex) => {
+    const clean = hex.replace('#', '');
+    const r = parseInt(clean.slice(0, 2), 16) / 255;
+    const g = parseInt(clean.slice(2, 4), 16) / 255;
+    const b = parseInt(clean.slice(4, 6), 16) / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    if (delta < 0.08) return false;
+    let hue = 0;
+    if (max === r) hue = ((g - b) / delta) % 6;
+    else if (max === g) hue = (b - r) / delta + 2;
+    else hue = (r - g) / delta + 4;
+    hue = Math.round(hue * 60);
+    if (hue < 0) hue += 360;
+    // Purple / Violet / Magenta band is roughly 255deg..330deg
+    return hue >= 255 && hue <= 330;
+  };
+
+  for (const hex of WHEEL_SLICE_COLORS) {
+    assert.equal(isPurpleOrMagentaHex(hex), false, `Wheel slice color ${hex} must not be purple/magenta`);
+  }
+  for (const anchor of BACKGROUND_ANCHORS) {
+    assert.equal(isPurpleOrMagentaHex(anchor.color), false, `3D anchor color ${anchor.color} must not be purple/magenta`);
+  }
+});
+
+test('Spotlight word window keeps long sentences compact and centered around active word', () => {
+  const { computeSpotlightWindow } = require('../js/story-helpers.js');
+
+  const shortWin = computeSpotlightWindow(6, 3, 7);
+  assert.equal(shortWin.isCollapsed, false);
+  assert.deepEqual(shortWin.indices, [0, 1, 2, 3, 4, 5]);
+  assert.equal(shortWin.hiddenBefore, 0);
+  assert.equal(shortWin.hiddenAfter, 0);
+
+  const midWin = computeSpotlightWindow(24, 12, 7);
+  assert.equal(midWin.isCollapsed, true);
+  assert.equal(midWin.indices.length, 7);
+  assert.deepEqual(midWin.indices, [9, 10, 11, 12, 13, 14, 15]);
+  assert.equal(midWin.hiddenBefore, 9);
+  assert.equal(midWin.hiddenAfter, 8);
+
+  const endWin = computeSpotlightWindow(24, 23, 7);
+  assert.equal(endWin.isCollapsed, true);
+  assert.deepEqual(endWin.indices, [17, 18, 19, 20, 21, 22, 23]);
+  assert.equal(endWin.hiddenBefore, 17);
+  assert.equal(endWin.hiddenAfter, 0);
+});
+
+test('Compression stats compute bounded visual savings for token gauge', () => {
+  const { computeCompressionStats } = require('../js/story-helpers.js');
+
+  const stats = computeCompressionStats(34, 7);
+  assert.equal(stats.savedPct, 79);
+  assert.equal(stats.brickWidthPct, 21);
+
+  const clamped = computeCompressionStats(1, 5);
+  assert.equal(clamped.savedPct, 0);
+  assert.equal(clamped.brickWidthPct, 100);
+});
+
+
+
+

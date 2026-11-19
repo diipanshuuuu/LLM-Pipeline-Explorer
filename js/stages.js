@@ -1,7 +1,7 @@
 /**
- * Pipeline Stage Renderers — Single-Page Kid-Friendly Story Edition
- * Renders all 7 interactive chapters down one continuous scrolling page with
- * everyday analogies, hands-on toys, persistent 3D WebGL viewport, and optional deep-dive math.
+ * Pipeline Stage Renderers — Visual-First Interactive Story Edition
+ * Leads every chapter with bespoke, hands-on visual toys and diagrams,
+ * keeping text concise and easy to understand while preserving real Transformer math.
  */
 
 class PipelineStages {
@@ -15,6 +15,7 @@ class PipelineStages {
     this.tokenizerMode = "bpe"; // "bpe" | "word" | "char"
     this.bpeSampleWord = "transformer";
     this.bpeStepIndex = 0;
+    this._bpePlayTimer = null;
 
     // Stage 2 state
     this.compareWordA = "quick";
@@ -29,75 +30,60 @@ class PipelineStages {
     this.ropeSelectedPos = 2;
     this.ropeMode = "rope"; // "rope" | "sinusoidal" | "none"
     this.ropeAppliedTo3D = false;
+    this.orderSwapped = false;
+    this._clockPlayTimer = null;
 
     // Stage 4 state
     this.selectedHeadIndex = 0;
     this.causalMaskEnabled = true;
     this.attnViewMode = "arcs"; // "arcs" | "matrix"
     this._lastAttnArgs = null;
+    this._attnTourTimer = null;
 
     // Stage 5 state
     this.stage5Tab = "norm"; // "norm" | "skip" | "ffn"
-    this.normSpikeValue = 2.5;
+    this.normSpikeValue = 3.0;
+    this.spikeBarIndex = 2;
     this.skipConnectionEnabled = true;
     this.ffnArch = "swiglu"; // "swiglu" | "gelu"
     this.normType = "rmsnorm"; // "rmsnorm" | "layernorm"
+    this.selectedBulbIndex = -1;
 
     // Stage 6 state
     this.selectedLayer = 12;
+    this._elevatorTimer = null;
 
     // Stage 7 state
     this.currentSampleResult = null;
+    this.wheelRotationDeg = 0;
+    this.isWheelSpinning = false;
   }
 
   esc(str) {
     return this.app.escapeHtml(str);
   }
 
-  renderHandoff(inLabel, inVal, stepVal, outLabel, outVal) {
-    return `
-      <div class="handoff-bar" aria-label="Chapter data handoff">
-        <div class="handoff-col">
-          <span class="handoff-tag">What goes in &middot; ${this.esc(inLabel)}</span>
-          <span class="handoff-val mono">${this.esc(inVal)}</span>
-        </div>
-        <span class="handoff-arrow" aria-hidden="true">&rarr;</span>
-        <div class="handoff-col">
-          <span class="handoff-tag">What this step does</span>
-          <span class="handoff-val">${this.esc(stepVal)}</span>
-        </div>
-        <span class="handoff-arrow" aria-hidden="true">&rarr;</span>
-        <div class="handoff-col">
-          <span class="handoff-tag">What comes out &middot; ${this.esc(outLabel)}</span>
-          <span class="handoff-val is-out mono">${this.esc(outVal)}</span>
-        </div>
-      </div>
-    `;
-  }
-
-  renderTryThis(htmlText) {
-    return `
-      <div class="try-this-bar">
-        <span class="try-this-lead">Play with it:</span>
-        <span>${htmlText}</span>
-      </div>
-    `;
+  isLightTheme() {
+    return this.app && this.app.theme === "light";
   }
 
   selectToken(idx) {
     this.selectedTokenIndex = idx;
+    this.app.markStageExplored(1);
     this.app.renderLiveTokenBar();
     this.app.renderStageById(1);
-    this.updateStage2HandoffAndInspector();
+    this.updateStage2Inspector();
     if (window.vectorView) {
       window.vectorView.selectTokenByIndex(idx);
     }
     this.app.renderStageById(4);
     this.app.renderStageById(5);
+    this.app.updateHeroVisualPipeline();
+    this.app.updateStoryConnectors();
   }
 
   // ========================================================================
-  // CHAPTER 1: Word Bricks (Tokenization & Live LEGO Merge Machine)
+  // CHAPTER 1: Word Bricks (Visual LEGO Bricks + Animated Glue Machine)
   // ========================================================================
   renderStage1(container) {
     const rawText = this.app.currentPrompt;
@@ -116,111 +102,128 @@ class PipelineStages {
 
     const bpeCount = bpeTokens.length;
     const charCount = Math.max(1, charTokens.length);
-    const savingsPct = Math.max(0, Math.round((1 - bpeCount / charCount) * 100));
+    const comp = typeof computeCompressionStats === "function"
+      ? computeCompressionStats(charCount, bpeCount)
+      : { savedPct: Math.max(0, Math.round((1 - bpeCount / charCount) * 100)), brickWidthPct: Math.max(12, Math.round((bpeCount / charCount) * 100)) };
 
     const steps = getBPEMergeSteps(this.bpeSampleWord || "transformer");
     const maxStep = Math.max(0, steps.length - 1);
     this.bpeStepIndex = Math.min(this.bpeStepIndex, maxStep);
     const currentStep = steps[this.bpeStepIndex] || steps[0];
 
-    const idPreview = bpeTokens.slice(0, 4).map(t => `#${t.id}`).join(", ") + (bpeTokens.length > 4 ? ", ..." : "");
+    const brickColors = ["is-orange", "is-teal", "is-amber", "is-lime", "is-rose", "is-sky"];
 
     container.innerHTML = `
       <div class="stage-card">
-        <div class="stage-top-header">
-          <div class="stage-kicker">Chapter 1 of 7 &middot; Word Bricks (Tokenization)</div>
-          <h2 class="stage-title">Chopping your sentence into numbered LEGO bricks</h2>
-          <div class="stage-summary-box">
-            <strong>Imagine this:</strong> Computers can't read English letters the way your eyes do—they only understand numbers! So first, the AI snaps your sentence into familiar LEGO-like pieces (called <strong>tokens</strong>) and stamps each piece with a secret ID number from its giant dictionary.
+        <div class="stage-header-compact stage-header-row">
+          <div>
+            <div class="stage-kicker">01 &middot; Tokenization (Word Bricks)</div>
+            <h2 class="stage-title">Chop text into token IDs</h2>
           </div>
-          ${this.renderHandoff(
-            "Your sentence",
-            `"${rawText.slice(0, 22)}${rawText.length > 22 ? "..." : ""}"`,
-            "Snaps text into reusable LEGO word pieces",
-            "Secret Brick IDs",
-            `[${idPreview}]`
-          )}
+          <span class="stage-live-pill mono tabular-nums">${displayTokens.length} tokens</span>
         </div>
 
         <div class="stage-visual-container">
-          ${this.renderTryThis("Click any word brick below to peek at its secret ID number, or switch between <strong>Smart Bricks</strong> and <strong>Single Letters</strong> to see why grouping letters saves the AI tons of work.")}
-
           <div class="stage-toolbar-row">
-            <span class="section-label">Your sentence snapped into ${displayTokens.length} bricks</span>
-            <div class="segmented-group" role="group" aria-label="Brick slicing method">
-              <button type="button" class="seg-btn ${mode === "bpe" ? "is-active" : ""}" onclick="pipelineStages.setTokenizerMode('bpe')">Smart Bricks / BPE (${bpeTokens.length})</button>
-              <button type="button" class="seg-btn ${mode === "word" ? "is-active" : ""}" onclick="pipelineStages.setTokenizerMode('word')">Whole Words (${wordTokens.length})</button>
-              <button type="button" class="seg-btn ${mode === "char" ? "is-active" : ""}" onclick="pipelineStages.setTokenizerMode('char')">Single Letters (${charTokens.length})</button>
+            <span class="section-label">Tap a token</span>
+            <div class="segmented-group" role="group" aria-label="Tokenization method">
+              <button type="button" class="seg-btn ${mode === "bpe" ? "is-active" : ""}" onclick="pipelineStages.setTokenizerMode('bpe')">BPE (${bpeTokens.length})</button>
+              <button type="button" class="seg-btn ${mode === "word" ? "is-active" : ""}" onclick="pipelineStages.setTokenizerMode('word')">Word (${wordTokens.length})</button>
+              <button type="button" class="seg-btn ${mode === "char" ? "is-active" : ""}" onclick="pipelineStages.setTokenizerMode('char')">Char (${charTokens.length})</button>
             </div>
           </div>
 
-          <div class="inset-panel">
-            <div class="token-blocks-grid">
-              ${displayTokens.map((t, idx) => `
-                <button type="button" class="token-block ${idx === selectedIdx ? "active" : ""}" onclick="pipelineStages.selectToken(${idx})">
-                  <span class="token-word">"${this.esc(t.text)}"</span>
-                  <span class="token-id-sub tabular-nums">ID #${t.id}</span>
-                </button>
-              `).join("")}
+          <!-- Visual LEGO Brick Conveyor -->
+          <div class="inset-panel brick-stage-panel">
+            <div class="lego-bricks-grid">
+              ${displayTokens.map((t, idx) => {
+                const tint = brickColors[idx % brickColors.length];
+                return `
+                  <button type="button" class="lego-brick ${tint} ${idx === selectedIdx ? "active" : ""}" style="--stagger:${idx};" onclick="pipelineStages.selectToken(${idx})">
+                    <span class="lego-studs" aria-hidden="true"><span></span><span></span></span>
+                    <span class="lego-word">"${this.esc(t.text)}"</span>
+                    <span class="lego-id tabular-nums">#${t.id}</span>
+                  </button>
+                `;
+              }).join("")}
+            </div>
+
+            <!-- Visual Transformation Strip + Compression Gauge -->
+            <div class="visual-bridge-strip">
+              <div class="bridge-node">
+                <span class="bridge-label">Token</span>
+                <span class="bridge-val mono">"${this.esc(activeToken.text)}"</span>
+              </div>
+              <span class="bridge-arrow" aria-hidden="true">&rarr;</span>
+              <div class="bridge-node is-accent">
+                <span class="bridge-label">Token ID</span>
+                <span class="bridge-val mono tabular-nums">#${activeToken.id}</span>
+              </div>
+              <span class="bridge-arrow" aria-hidden="true">&rarr;</span>
+              <div class="bridge-node">
+                <span class="bridge-label">UTF-8 Bytes</span>
+                <span class="bridge-val mono tabular-nums">${(activeToken.bytes || []).slice(0, 4).map(b => b.toString(16).toUpperCase().padStart(2, "0")).join(" ")}</span>
+              </div>
+              <div class="compression-gauge">
+                <div class="compression-meta">
+                  <span class="bridge-label">${charCount} chars &rarr; ${bpeCount} tokens</span>
+                  <span class="mono tabular-nums compression-pct">-${comp.savedPct}%</span>
+                </div>
+                <div class="compression-track" aria-hidden="true">
+                  <div class="compression-fill" style="width:${comp.brickWidthPct}%;"></div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="inspector-grid">
-            <div class="stat-cell">
-              <div class="stat-cell-label">Spotlight Brick &amp; Secret ID</div>
-              <div class="stat-cell-value tabular-nums">"${this.esc(activeToken.text)}" &middot; #${activeToken.id}</div>
-            </div>
-            <div class="stat-cell">
-              <div class="stat-cell-label">Computer Number Codes (UTF-8)</div>
-              <div class="stat-cell-value tabular-nums">[${(activeToken.bytes || []).slice(0, 6).map(b => "0x" + b.toString(16).toUpperCase().padStart(2, "0")).join(" ")}]</div>
-            </div>
-            <div class="stat-cell">
-              <div class="stat-cell-label">Bricks Saved vs 1-by-1 Letters</div>
-              <div class="stat-cell-value tabular-nums">${bpeCount} bricks vs ${charCount} letters (${savingsPct}% fewer!)</div>
-            </div>
-          </div>
-
-          <!-- Interactive BPE LEGO Glue Explorer -->
+          <!-- Interactive BPE LEGO Glue Machine -->
           <div class="inset-panel bpe-stepper-panel">
             <div class="stage-toolbar-row">
-              <div>
-                <div class="section-label">How does an AI invent Smart Bricks? Watch it glue letters together!</div>
-                <div style="font-size:12px; color:var(--ink-muted);">Click <strong>Glue Next Pair</strong> to watch tiny single letters snap into bigger, reusable word pieces.</div>
-              </div>
-              <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                <select aria-label="Choose word to glue" class="clean-select" onchange="pipelineStages.setBpeSampleWord(this.value)">
+              <div class="section-label">BPE Merge Lab (Byte-Pair Encoding)</div>
+              <div class="inline-controls">
+                <select aria-label="Choose word to merge" class="clean-select compact-select" onchange="pipelineStages.setBpeSampleWord(this.value)">
                   ${["transformer", "attention", "unbelievable", "sleeping", "quick"].map(w => `
                     <option value="${w}" ${this.bpeSampleWord === w ? "selected" : ""}>${w}</option>
                   `).join("")}
                 </select>
-                <button type="button" class="btn btn-sm" onclick="pipelineStages.stepBpe(-1)" ${this.bpeStepIndex <= 0 ? "disabled" : ""}>Undo</button>
-                <button type="button" class="btn btn-sm btn-primary" onclick="pipelineStages.stepBpe(1)" ${this.bpeStepIndex >= maxStep ? "disabled" : ""}>Glue Next Pair</button>
-                <button type="button" class="btn btn-sm" onclick="pipelineStages.resetBpeSteps()">Start Over</button>
+                <button type="button" class="btn btn-sm btn-primary" onclick="pipelineStages.toggleBpeAutoPlay()">
+                  ${this._bpePlayTimer ? "Pause" : "Play BPE"}
+                </button>
+                <button type="button" class="btn btn-sm" onclick="pipelineStages.stepBpe(1)" ${this.bpeStepIndex >= maxStep ? "disabled" : ""}>+ Merge</button>
+                <button type="button" class="btn btn-sm btn-ghost" onclick="pipelineStages.resetBpeSteps()">Reset</button>
               </div>
             </div>
 
             <div class="bpe-pieces-row">
-              ${currentStep.pieces.map(piece => `
+              ${currentStep.pieces.map((piece, i) => `
                 <span class="bpe-piece ${currentStep.mergedToken === piece ? "is-merged" : ""}">"${this.esc(piece)}"</span>
+                ${i < currentStep.pieces.length - 1 ? `<span class="bpe-plus" aria-hidden="true">+</span>` : ""}
               `).join("")}
             </div>
-            <div style="font-size:12px; color:var(--ink-secondary); display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-              <span><strong>Glue Step ${this.bpeStepIndex} of ${maxStep}:</strong> ${this.esc(currentStep.description)}</span>
-              <span class="mono tabular-nums">${currentStep.pieces.length} ${currentStep.pieces.length === 1 ? "brick" : "bricks"}</span>
+            <div class="bpe-footer-meta">
+              <div class="bpe-step-dots" role="group" aria-label="BPE merge steps">
+                ${steps.map((_, i) => `
+                  <button
+                    type="button"
+                    class="bpe-step-dot ${i === this.bpeStepIndex ? "is-active" : i < this.bpeStepIndex ? "is-done" : ""}"
+                    onclick="pipelineStages.setBpeStep(${i})"
+                    title="Step ${i}"
+                    aria-label="Merge step ${i}"
+                  ></button>
+                `).join("")}
+              </div>
+              <span class="mono tabular-nums bpe-count-pill">${currentStep.mergedToken ? `Merged "${this.esc(currentStep.mergedToken)}" · ` : ""}${currentStep.pieces.length} ${currentStep.pieces.length === 1 ? "token" : "tokens"}</span>
             </div>
           </div>
         </div>
 
         <details class="stage-deep-dive">
           <summary class="deep-dive-summary">
-            <span>Want the Nerdy AI Math? (BPE Dictionary &amp; Byte Fallback)</span>
+            <span>Math Formula &middot; BPE</span>
             <span class="mono">+</span>
           </summary>
           <div class="deep-dive-content">
-            <p>During training, Byte-Pair Encoding (BPE) scans billions of pages, finds the most common pair of letters standing next to each other, and glues them into one new brick until the dictionary reaches size |V|.</p>
-            <pre class="formula-block">Dictionary size |V|: 50,257 (GPT-2) to 128,256 (LLaMA-3)
-Sentence mapping:    text &rarr; [id_1, id_2, ..., id_N]
-Weird emoji/symbol:  UTF-8 1-byte fallback (0x00 .. 0xFF)</pre>
+            <pre class="formula-block">text &rarr; [id_1, id_2, ..., id_N]   (|V| = 50k–128k tokens)</pre>
           </div>
         </details>
       </div>
@@ -229,45 +232,72 @@ Weird emoji/symbol:  UTF-8 1-byte fallback (0x00 .. 0xFF)</pre>
 
   setTokenizerMode(mode) {
     this.tokenizerMode = mode;
+    this.app.markStageExplored(1);
     this.app.renderStageById(1);
   }
 
   setBpeSampleWord(word) {
+    this.stopBpeAutoPlay();
     this.bpeSampleWord = word || "transformer";
     this.bpeStepIndex = 0;
+    this.app.markStageExplored(1);
+    this.app.renderStageById(1);
+  }
+
+  setBpeStep(idx) {
+    this.stopBpeAutoPlay();
+    const steps = getBPEMergeSteps(this.bpeSampleWord || "transformer");
+    this.bpeStepIndex = Math.max(0, Math.min(steps.length - 1, parseInt(idx, 10) || 0));
+    this.app.markStageExplored(1);
     this.app.renderStageById(1);
   }
 
   stepBpe(delta) {
     const steps = getBPEMergeSteps(this.bpeSampleWord || "transformer");
     this.bpeStepIndex = Math.max(0, Math.min(steps.length - 1, this.bpeStepIndex + delta));
+    this.app.markStageExplored(1);
     this.app.renderStageById(1);
   }
 
   resetBpeSteps() {
+    this.stopBpeAutoPlay();
     this.bpeStepIndex = 0;
     this.app.renderStageById(1);
   }
 
-  // ========================================================================
-  // CHAPTER 2: 3D Meaning Map (Persistent WebGL Embeddings + Twin Tester)
-  // ========================================================================
-  buildStage2HandoffHtml() {
-    const tokens = this.app.tokens;
-    const hp = this.app.hyperparams;
-    const focusTok = tokens[Math.min(this.selectedTokenIndex, Math.max(0, tokens.length - 1))] || tokens[0];
-    const focusVec = this.math.getTokenEmbedding(focusTok, hp.d_model);
-    const vecSnippet = `[${focusVec.slice(0, 3).map(v => (v >= 0 ? "+" : "") + v.toFixed(2)).join(", ")}, ...]`;
-
-    return this.renderHandoff(
-      "From Chapter 1",
-      `Brick #${focusTok.id} ("${focusTok.text}")`,
-      "Looks up its GPS spot on the meaning map",
-      "8 Meaning Clues",
-      vecSnippet
-    );
+  stopBpeAutoPlay() {
+    if (this._bpePlayTimer) {
+      clearInterval(this._bpePlayTimer);
+      this._bpePlayTimer = null;
+    }
   }
 
+  toggleBpeAutoPlay() {
+    this.app.markStageExplored(1);
+    if (this._bpePlayTimer) {
+      this.stopBpeAutoPlay();
+      this.app.renderStageById(1);
+      return;
+    }
+    const steps = getBPEMergeSteps(this.bpeSampleWord || "transformer");
+    if (this.bpeStepIndex >= steps.length - 1) {
+      this.bpeStepIndex = 0;
+    }
+    this._bpePlayTimer = setInterval(() => {
+      const s = getBPEMergeSteps(this.bpeSampleWord || "transformer");
+      if (this.bpeStepIndex >= s.length - 1) {
+        this.stopBpeAutoPlay();
+      } else {
+        this.bpeStepIndex += 1;
+      }
+      this.app.renderStageById(1);
+    }, 650);
+    this.app.renderStageById(1);
+  }
+
+  // ========================================================================
+  // CHAPTER 2: 3D Meaning Map (Persistent WebGL Map + Visual Twin Compass)
+  // ========================================================================
   renderStage2(container) {
     const tokens = this.app.tokens;
     const hp = this.app.hyperparams;
@@ -275,8 +305,7 @@ Weird emoji/symbol:  UTF-8 1-byte fallback (0x00 .. 0xFF)</pre>
     const existingViewport = container.querySelector("#threeViewportContainer");
 
     if (existingViewport && this._stage2Mounted) {
-      // Zero-flicker live update: preserve the mounted 3D WebGL canvas!
-      this.updateStage2HandoffAndInspector();
+      this.updateStage2Inspector();
       this.syncStage2ToolbarButtons();
       if (window.vectorView) {
         window.vectorView.mode = this.vpMode;
@@ -295,49 +324,48 @@ Weird emoji/symbol:  UTF-8 1-byte fallback (0x00 .. 0xFF)</pre>
 
     container.innerHTML = `
       <div class="stage-card">
-        <div class="stage-top-header">
-          <div class="stage-kicker">Chapter 2 of 7 &middot; 3D Meaning Map (Embeddings)</div>
-          <h2 class="stage-title">Placing every word on a 3D treasure map of meaning</h2>
-          <div class="stage-summary-box">
-            <strong>Imagine this:</strong> A brick number like #42 doesn't tell the AI what a word actually means. So the AI looks up a secret GPS address for each brick on a 3D map. Words with similar meanings—like <em>quick</em> and <em>fast</em>, or <em>fox</em> and <em>dog</em>—live in the same neighborhood!
+        <div class="stage-header-compact stage-header-row">
+          <div>
+            <div class="stage-kicker">02 &middot; Embeddings (3D Meaning Map)</div>
+            <h2 class="stage-title">Map tokens to 3D vectors</h2>
           </div>
-          <div id="stage2HandoffSlot">${this.buildStage2HandoffHtml()}</div>
+          <span class="stage-live-pill mono">Embeddings</span>
         </div>
 
         <div class="stage-visual-container">
-          ${this.renderTryThis("Drag inside the dark 3D map to spin it around! Then click <strong>fox vs dog</strong> and <strong>fox vs transformer</strong> on the right to see how close neighbors have a tiny angle between them.")}
           <div class="stage2-split">
             <!-- Left: Interactive 3D Meaning Map -->
-            <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="stage2-map-col">
               <div class="viewport-clean" id="threeViewportContainer" data-testid="three-viewport">
                 <div class="viewport-toolbar">
                   <div class="viewport-toolbar-group">
-                    <button type="button" id="vpModeArrows" class="vp-btn ${this.vpMode === "arrows" ? "is-active" : ""}" onclick="pipelineStages.setViewportMode('arrows')">Arrows</button>
-                    <button type="button" id="vpModePoints" class="vp-btn ${this.vpMode === "points" ? "is-active" : ""}" onclick="pipelineStages.setViewportMode('points')">Dots</button>
+                    <button type="button" id="vpModeArrows" class="vp-btn ${this.vpMode === "arrows" ? "is-active" : ""}" onclick="pipelineStages.setViewportMode('arrows')">Vectors</button>
+                    <button type="button" id="vpModePoints" class="vp-btn ${this.vpMode === "points" ? "is-active" : ""}" onclick="pipelineStages.setViewportMode('points')">Points</button>
                     <button type="button" id="vpAnchorsBtn" class="vp-btn ${this.vpAnchorsOn ? "is-active" : ""}" onclick="pipelineStages.toggleViewportAnchors()">Neighbors</button>
                   </div>
                   <div class="viewport-toolbar-group">
-                    <button type="button" id="vpRotateBtn" class="vp-btn ${this.vpAutoRotate ? "is-active" : ""}" onclick="pipelineStages.toggleViewportRotate()">Spin Map</button>
-                    <button type="button" class="vp-btn" onclick="if(window.vectorView) vectorView.resetCamera()">Reset View</button>
+                    <button type="button" id="vpRotateBtn" class="vp-btn ${this.vpAutoRotate ? "is-active" : ""}" onclick="pipelineStages.toggleViewportRotate()">Spin</button>
+                    <button type="button" class="vp-btn" onclick="if(window.vectorView) vectorView.resetCamera()">Reset</button>
                   </div>
                 </div>
                 <div id="vectorSpaceHUD" class="vector-hud-container hidden"></div>
               </div>
               <div class="viewport-help-bar">
-                <span>Drag to spin &middot; Scroll to zoom &middot; Click any 2 word labels to measure how close they are</span>
-                <span class="mono">Neighborhoods: Animals &middot; Speed &middot; Actions &middot; Helpers</span>
+                <span class="kbd-chip">Drag</span>
+                <span class="kbd-chip">Zoom</span>
+                <span class="kbd-chip">Click 2 tokens</span>
               </div>
             </div>
 
-            <!-- Right: Word Twin Tester + 8 Secret Personality Bars -->
+            <!-- Right: Visual Twin Compass & 4-Trait Visual Bars -->
             <div class="inset-panel similarity-panel" id="stage2Inspector">
-              <div class="section-label">Word Twin Tester &amp; Meaning Scoreboard</div>
+              <div class="section-label">Cosine Similarity Compass</div>
 
               <div class="select-pair-row">
                 <select id="compareWordASelect" aria-label="First word to compare" class="clean-select" onchange="pipelineStages.setComparePair(this.value, pipelineStages.compareWordB)">
                   ${vocabOptions.map(w => `<option value="${this.esc(w)}" ${this.compareWordA.toLowerCase() === w.toLowerCase() ? "selected" : ""}>"${this.esc(w)}"</option>`).join("")}
                 </select>
-                <span class="mono" style="font-size:12px; color:var(--ink-muted);">vs</span>
+                <span class="mono muted-vs">vs</span>
                 <select id="compareWordBSelect" aria-label="Second word to compare" class="clean-select" onchange="pipelineStages.setComparePair(pipelineStages.compareWordA, this.value)">
                   ${vocabOptions.map(w => `<option value="${this.esc(w)}" ${this.compareWordB.toLowerCase() === w.toLowerCase() ? "selected" : ""}>"${this.esc(w)}"</option>`).join("")}
                 </select>
@@ -347,7 +375,7 @@ Weird emoji/symbol:  UTF-8 1-byte fallback (0x00 .. 0xFF)</pre>
                 <button type="button" class="preset-btn" onclick="pipelineStages.setComparePair('quick', 'fast')">quick vs fast</button>
                 <button type="button" class="preset-btn" onclick="pipelineStages.setComparePair('fox', 'dog')">fox vs dog</button>
                 <button type="button" class="preset-btn" onclick="pipelineStages.setComparePair('quick', 'lazy')">quick vs lazy</button>
-                <button type="button" class="preset-btn" onclick="pipelineStages.setComparePair('fox', 'transformer')">fox vs transformer</button>
+                <button type="button" class="preset-btn" onclick="pipelineStages.setComparePair('fox', 'transformer')">fox vs AI</button>
               </div>
 
               <div id="stage2SimilarityReadout"></div>
@@ -358,14 +386,11 @@ Weird emoji/symbol:  UTF-8 1-byte fallback (0x00 .. 0xFF)</pre>
 
         <details class="stage-deep-dive">
           <summary class="deep-dive-summary">
-            <span>Want the Nerdy AI Math? (Embedding Matrix &amp; Cosine Similarity)</span>
+            <span>Math Formula &middot; Cosine Similarity</span>
             <span class="mono">+</span>
           </summary>
           <div class="deep-dive-content">
-            <p>Each brick ID pulls out one row from a giant lookup table called the Embedding Matrix <strong>E</strong>. Real models like LLaMA-3 give every word 4,096 secret numbers instead of 3—we shrink it to 3D here so human eyes can explore it!</p>
-            <pre class="formula-block">GPS lookup:         e_i = E[token_id]
-Twin score (cos):   cos(&theta;) = (u &middot; v) / (||u|| &times; ||v||)
-Meaning:            +1.0 = exact twins, 0.0 = strangers, -1.0 = opposites</pre>
+            <pre class="formula-block">e_i = E[token_id]   &middot;   cos(&theta;) = (u &middot; v) / (||u|| &times; ||v||)</pre>
           </div>
         </details>
       </div>
@@ -395,23 +420,6 @@ Meaning:            +1.0 = exact twins, 0.0 = strangers, -1.0 = opposites</pre>
     }, 30);
   }
 
-  updateStage2HandoffAndInspector() {
-    const slot = document.getElementById("stage2HandoffSlot");
-    if (slot) {
-      slot.innerHTML = this.buildStage2HandoffHtml();
-    }
-    const vocabOptions = this.getComparableWordList();
-    const simAEl = document.getElementById("compareWordASelect");
-    const simBEl = document.getElementById("compareWordBSelect");
-    if (simAEl) {
-      simAEl.innerHTML = vocabOptions.map(w => `<option value="${this.esc(w)}" ${this.compareWordA.toLowerCase() === w.toLowerCase() ? "selected" : ""}>"${this.esc(w)}"</option>`).join("");
-    }
-    if (simBEl) {
-      simBEl.innerHTML = vocabOptions.map(w => `<option value="${this.esc(w)}" ${this.compareWordB.toLowerCase() === w.toLowerCase() ? "selected" : ""}>"${this.esc(w)}"</option>`).join("");
-    }
-    this.updateStage2Inspector();
-  }
-
   syncStage2ToolbarButtons() {
     const arrows = document.getElementById("vpModeArrows");
     const points = document.getElementById("vpModePoints");
@@ -432,6 +440,7 @@ Meaning:            +1.0 = exact twins, 0.0 = strangers, -1.0 = opposites</pre>
 
   setViewportMode(mode) {
     this.vpMode = mode;
+    this.app.markStageExplored(2);
     if (window.vectorView) {
       window.vectorView.setMode(mode);
     }
@@ -440,6 +449,7 @@ Meaning:            +1.0 = exact twins, 0.0 = strangers, -1.0 = opposites</pre>
 
   toggleViewportAnchors() {
     this.vpAnchorsOn = !this.vpAnchorsOn;
+    this.app.markStageExplored(2);
     if (window.vectorView) {
       window.vectorView.toggleAnchors(this.vpAnchorsOn);
     }
@@ -448,6 +458,7 @@ Meaning:            +1.0 = exact twins, 0.0 = strangers, -1.0 = opposites</pre>
 
   toggleViewportRotate() {
     this.vpAutoRotate = !this.vpAutoRotate;
+    this.app.markStageExplored(2);
     if (window.vectorView) {
       window.vectorView.toggleAutoRotate(this.vpAutoRotate);
     }
@@ -457,7 +468,11 @@ Meaning:            +1.0 = exact twins, 0.0 = strangers, -1.0 = opposites</pre>
   setComparePair(wA, wB) {
     this.compareWordA = wA;
     this.compareWordB = wB;
+    this.app.markStageExplored(2);
     this.updateStage2Inspector();
+    if (window.vectorView && typeof window.vectorView.selectPairByWords === "function") {
+      window.vectorView.selectPairByWords(wA, wB);
+    }
   }
 
   updateStage2Inspector() {
@@ -465,6 +480,18 @@ Meaning:            +1.0 = exact twins, 0.0 = strangers, -1.0 = opposites</pre>
     const tokens = this.app.tokens;
     const wordA = this.compareWordA || "quick";
     const wordB = this.compareWordB || "fast";
+
+    const vocabOptions = this.getComparableWordList();
+    const simAEl = document.getElementById("compareWordASelect");
+    const simBEl = document.getElementById("compareWordBSelect");
+    if (simAEl) {
+      simAEl.innerHTML = vocabOptions.map(w => `<option value="${this.esc(w)}" ${wordA.toLowerCase() === w.toLowerCase() ? "selected" : ""}>"${this.esc(w)}"</option>`).join("");
+      simAEl.value = wordA;
+    }
+    if (simBEl) {
+      simBEl.innerHTML = vocabOptions.map(w => `<option value="${this.esc(w)}" ${wordB.toLowerCase() === w.toLowerCase() ? "selected" : ""}>"${this.esc(w)}"</option>`).join("");
+      simBEl.value = wordB;
+    }
 
     const findTok = (word) => {
       const fromVocab = VOCABULARY_LIST.find(v => v.text.toLowerCase() === word.toLowerCase());
@@ -480,41 +507,59 @@ Meaning:            +1.0 = exact twins, 0.0 = strangers, -1.0 = opposites</pre>
     const angleDeg = MathEngine.angleBetween(vecA, vecB);
 
     const verdict = cosSim > 0.65
-      ? "Almost twins! They live right next door."
+      ? "Twins"
       : cosSim > 0.15
-        ? "Friendly neighbors in a similar area."
+        ? "Close"
         : cosSim > -0.2
-          ? "Total strangers pointing different ways (~90°)."
-          : "Opposites on the map! (>90° apart)";
+          ? "90° Apart"
+          : "Opposites";
 
     const simColor = cosSim > 0.65 ? "var(--teal)" : cosSim < -0.1 ? "var(--rose)" : "var(--accent-primary)";
+    const meterPct = Math.round(((cosSim + 1) / 2) * 100);
 
-    const rad = (Math.min(180, Math.max(5, angleDeg)) * Math.PI) / 180;
-    const gx = 90 + Math.cos(-rad) * 58;
-    const gy = 74 + Math.sin(-rad) * 58;
-    const largeArc = angleDeg > 180 ? 1 : 0;
-
-    const simAEl = document.getElementById("compareWordASelect");
-    const simBEl = document.getElementById("compareWordBSelect");
-    if (simAEl) simAEl.value = wordA;
-    if (simBEl) simBEl.value = wordB;
+    const rad = (Math.min(180, Math.max(4, angleDeg)) * Math.PI) / 180;
+    const cx = 86;
+    const cy = 78;
+    const r = 58;
+    const gx = cx + Math.cos(-rad) * r;
+    const gy = cy + Math.sin(-rad) * r;
+    const isLight = this.isLightTheme();
+    const colA = isLight ? "#EA580C" : "#FB923C";
+    const colB = isLight ? "#059669" : "#34D399";
+    const colCenter = isLight ? "#181816" : "#F5F4EE";
+    const colArc = isLight ? "#78766D" : "#A8A29E";
 
     const simEl = document.getElementById("stage2SimilarityReadout");
     if (simEl) {
       simEl.innerHTML = `
-        <div class="stat-cell" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-          <svg width="118" height="72" viewBox="0 0 180 88" aria-label="Angle gauge showing ${angleDeg.toFixed(1)} degrees" style="flex-shrink:0;">
-            <line x1="82" y1="74" x2="144" y2="74" stroke="#2563EB" stroke-width="3" stroke-linecap="round"/>
-            <line x1="82" y1="74" x2="${(gx - 8).toFixed(1)}" y2="${gy.toFixed(1)}" stroke="#0D9488" stroke-width="3" stroke-linecap="round"/>
-            <path d="M 108 74 A 26 26 0 ${largeArc} 0 ${(82 + Math.cos(-rad) * 26).toFixed(1)} ${(74 + Math.sin(-rad) * 26).toFixed(1)}" fill="none" stroke="#64748B" stroke-width="1.5" stroke-dasharray="3 2"/>
-            <circle cx="82" cy="74" r="3.5" fill="#14181F"/>
-            <text x="147" y="78" font-size="11" font-family="JetBrains Mono" fill="#2563EB">${this.esc(wordA.slice(0, 6))}</text>
-            <text x="${(gx - 8 + (gx >= 90 ? 4 : -34)).toFixed(1)}" y="${Math.max(12, gy - 4).toFixed(1)}" font-size="11" font-family="JetBrains Mono" fill="#0D9488">${this.esc(wordB.slice(0, 6))}</text>
-          </svg>
-          <div style="min-width:0; flex:1;">
-            <div class="mono tabular-nums" style="font-size:20px; font-weight:700; color:${simColor};">${cosSim.toFixed(3)}</div>
-            <div class="mono tabular-nums" style="font-size:12px; color:var(--ink-secondary);">Map Angle: ${angleDeg.toFixed(1)}&deg;</div>
-            <div style="font-size:12px; color:var(--ink-muted); margin-top:2px;">${verdict}</div>
+        <div class="compass-card">
+          <div class="compass-top-row">
+            <svg width="176" height="92" viewBox="0 0 186 92" aria-label="Angle gauge showing ${angleDeg.toFixed(1)} degrees" style="flex-shrink:0;">
+              <path d="M 28 78 A 58 58 0 0 1 144 78" fill="none" stroke="${colArc}" stroke-opacity="0.22" stroke-width="2" stroke-dasharray="4 4"/>
+              <line x1="${cx}" y1="${cy}" x2="${cx + r}" y2="${cy}" stroke="${colA}" stroke-width="3.2" stroke-linecap="round"/>
+              <line x1="${cx}" y1="${cy}" x2="${gx.toFixed(1)}" y2="${gy.toFixed(1)}" stroke="${colB}" stroke-width="3.2" stroke-linecap="round"/>
+              <path d="M ${cx + 26} ${cy} A 26 26 0 0 0 ${(cx + Math.cos(-rad) * 26).toFixed(1)} ${(cy + Math.sin(-rad) * 26).toFixed(1)}" fill="none" stroke="${colArc}" stroke-width="1.6"/>
+              <circle cx="${cx}" cy="${cy}" r="4" fill="${colCenter}"/>
+              <text x="${cx + r - 2}" y="${cy + 13}" font-size="11" font-family="JetBrains Mono" text-anchor="end" fill="${colA}">${this.esc(wordA.slice(0, 8))}</text>
+              <text x="${Math.min(180, Math.max(6, gx + (gx >= cx ? 6 : -6))).toFixed(1)}" y="${Math.max(13, gy - 4).toFixed(1)}" font-size="11" font-family="JetBrains Mono" text-anchor="${gx >= cx ? "start" : "end"}" fill="${colB}">${this.esc(wordB.slice(0, 8))}</text>
+            </svg>
+            <div class="compass-stats">
+              <div class="mono tabular-nums compass-score" style="color:${simColor};">${angleDeg.toFixed(0)}&deg;</div>
+              <div class="compass-verdict">${verdict}</div>
+              <div class="mono tabular-nums compass-sub">Similarity ${cosSim.toFixed(2)}</div>
+            </div>
+          </div>
+
+          <!-- Visual Opposites-to-Twins Spectrum -->
+          <div class="spectrum-wrap">
+            <div class="spectrum-bar">
+              <div class="spectrum-dot" style="left:${Math.max(4, Math.min(96, meterPct))}%; background:${simColor};"></div>
+            </div>
+            <div class="spectrum-labels">
+              <span>Opposites</span>
+              <span>Unrelated</span>
+              <span>Twins</span>
+            </div>
           </div>
         </div>
       `;
@@ -523,28 +568,28 @@ Meaning:            +1.0 = exact twins, 0.0 = strangers, -1.0 = opposites</pre>
     const selectedIdx = Math.min(this.selectedTokenIndex, Math.max(0, tokens.length - 1));
     const activeTok = tokens[selectedIdx] || tokens[0];
     const activeVec = this.math.getTokenEmbedding(activeTok, hp.d_model);
+    const dimHints = ["Topic", "Speed", "Action", "Nature"];
 
     const dnaEl = document.getElementById("stage2VectorDNA");
-    const dimHints = ["Topic", "Speed", "Action", "Nature", "Helper", "Thing", "Size", "Vibe"];
     if (dnaEl) {
       dnaEl.innerHTML = `
-        <div style="font-size:12px; font-weight:600; color:var(--ink-secondary); margin-bottom:6px;">
-          Secret meaning bars inside <span class="mono">"${this.esc(activeTok.text)}"</span>:
+        <div class="dna-header">
+          <span>Embedding vector <strong class="mono">"${this.esc(activeTok.text)}"</strong></span>
+          <span class="mono muted-mini">4 of ${hp.d_model} dims</span>
         </div>
         <div class="vector-dna-list">
-          ${activeVec.map((val, i) => {
-            const pct = Math.min(48, Math.abs(val) * 55);
+          ${activeVec.slice(0, 4).map((val, i) => {
+            const pct = Math.min(48, Math.abs(val) * 56);
             const left = val >= 0 ? 50 : 50 - pct;
             const color = val >= 0 ? "var(--accent-primary)" : "var(--amber)";
-            const hint = dimHints[i] || `d${i}`;
             return `
-              <div class="dna-row" style="grid-template-columns: 62px 1fr 48px;" title="Feature d${i} (${hint}): ${val.toFixed(3)}">
-                <span style="color:var(--ink-muted); font-size:10.5px;">${hint}</span>
+              <div class="dna-row" style="grid-template-columns: 56px 1fr 48px;">
+                <span class="dna-label">${dimHints[i]}</span>
                 <div class="dna-track">
                   <div class="dna-zero"></div>
                   <div class="dna-bar" style="left:${left.toFixed(1)}%; width:${pct.toFixed(1)}%; background:${color};"></div>
                 </div>
-                <span class="tabular-nums" style="text-align:right; color:var(--ink-primary);">${val >= 0 ? "+" : ""}${val.toFixed(2)}</span>
+                <span class="tabular-nums dna-val">${val >= 0 ? "+" : ""}${val.toFixed(2)}</span>
               </div>
             `;
           }).join("")}
@@ -554,7 +599,7 @@ Meaning:            +1.0 = exact twins, 0.0 = strangers, -1.0 = opposites</pre>
   }
 
   // ========================================================================
-  // CHAPTER 3: Word Order Clocks (RoPE & Positional Encoding)
+  // CHAPTER 3: Word Order Clocks (Clock Dial + Visual Story Flip Card)
   // ========================================================================
   renderStage3(container) {
     const tokens = this.app.tokens;
@@ -564,57 +609,52 @@ Meaning:            +1.0 = exact twins, 0.0 = strangers, -1.0 = opposites</pre>
 
     container.innerHTML = `
       <div class="stage-card">
-        <div class="stage-top-header">
-          <div class="stage-kicker">Chapter 3 of 7 &middot; Word Order Clocks (Position)</div>
-          <h2 class="stage-title">Giving every word a spinning seat-number clock</h2>
-          <div class="stage-summary-box">
-            <strong>Imagine this:</strong> "Dog chases fox" and "Fox chases dog" have the exact same words—only the <strong>order</strong> tells you who is running! To remember who came first, modern AI spins a tiny clock hand on each word (called <strong>RoPE</strong>): Seat #0 starts at 12 o'clock, Seat #1 clicks forward one notch, and so on.
+        <div class="stage-header-compact stage-header-row">
+          <div>
+            <div class="stage-kicker">03 &middot; Positional Encoding (RoPE)</div>
+            <h2 class="stage-title">Rotate vectors by position</h2>
           </div>
-          ${this.renderHandoff(
-            "From Chapter 2",
-            `${tokens.length} floating word locations`,
-            "Stamps each word's seat number with a clock angle",
-            "Ordered Words",
-            `"${tokenAtPos.text}" @ ${this.ropeSelectedPos * 36}°`
-          )}
+          <span id="stage3AnglePill" class="stage-live-pill mono tabular-nums">#${this.ropeSelectedPos + 1} &middot; ${this.ropeSelectedPos * 36}&deg;</span>
         </div>
 
         <div class="stage-visual-container">
-          ${this.renderTryThis("Click any word seat below to watch its clock hand spin! Then click <strong>No Order (Word Soup!)</strong> to see what goes wrong if the AI forgets word order.")}
-
           <div class="stage-toolbar-row">
-            <span class="section-label">How the AI remembers seat order</span>
-            <div class="segmented-group" role="group" aria-label="Word order method">
-              <button type="button" class="seg-btn ${mode === "rope" ? "is-active" : ""}" onclick="pipelineStages.setRoPEMode('rope')">Spinning Clocks (RoPE)</button>
-              <button type="button" class="seg-btn ${mode === "sinusoidal" ? "is-active" : ""}" onclick="pipelineStages.setRoPEMode('sinusoidal')">Music Waves (Classic)</button>
-              <button type="button" class="seg-btn ${mode === "none" ? "is-active" : ""}" onclick="pipelineStages.setRoPEMode('none')">No Order (Word Soup!)</button>
+            <div class="slot-chips-row" id="ropeSlotChips" role="group" aria-label="Pick a word position">
+              ${tokens.slice(0, 10).map((t, idx) => `
+                <button type="button" class="slot-chip-btn ${idx === this.ropeSelectedPos ? "is-active" : ""}" data-rope-pos="${idx}" onclick="pipelineStages.setRoPEPosition(${idx})">
+                  <span class="seat-num">#${idx + 1}</span>
+                  <span>"${this.esc(t.text)}"</span>
+                </button>
+              `).join("")}
             </div>
-          </div>
 
-          <div class="slot-chips-row" id="ropeSlotChips" role="group" aria-label="Pick a word seat">
-            ${tokens.map((t, idx) => `
-              <button type="button" class="slot-chip-btn ${idx === this.ropeSelectedPos ? "is-active" : ""}" data-rope-pos="${idx}" onclick="pipelineStages.setRoPEPosition(${idx})">
-                <span style="opacity:0.7;">Seat #${idx + 1}</span>
-                <span>"${this.esc(t.text)}"</span>
-              </button>
-            `).join("")}
+            <div class="segmented-group" role="group" aria-label="Positional encoding method">
+              <button type="button" class="seg-btn ${mode === "rope" ? "is-active" : ""}" onclick="pipelineStages.setRoPEMode('rope')">RoPE</button>
+              <button type="button" class="seg-btn ${mode === "sinusoidal" ? "is-active" : ""}" onclick="pipelineStages.setRoPEMode('sinusoidal')">Sinusoidal</button>
+              <button type="button" class="seg-btn ${mode === "none" ? "is-active" : ""}" onclick="pipelineStages.setRoPEMode('none')">None</button>
+            </div>
           </div>
 
           <div class="rope-stage-grid">
             <div class="canvas-frame">
-              <canvas id="ropeDialCanvas" class="dial-canvas" width="460" height="290"></canvas>
-              <div style="width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; color:#CBD5E1; font-size:12px;">
-                <label for="ropePosSlider" style="white-space:nowrap;">Slide seat:</label>
-                <input id="ropePosSlider" type="range" min="0" max="${Math.max(0, tokens.length - 1)}" value="${this.ropeSelectedPos}" oninput="pipelineStages.setRoPEPosition(this.value)" style="flex:1;">
-                <span id="ropePosReadout" class="mono tabular-nums" style="color:#F8FAFC; white-space:nowrap;">Seat #${this.ropeSelectedPos + 1} "${this.esc(tokenAtPos.text)}" (${this.ropeSelectedPos * 36}&deg;)</span>
+              <canvas id="ropeDialCanvas" class="dial-canvas" width="460" height="280"></canvas>
+              <div class="canvas-slider-row">
+                <button type="button" class="btn btn-sm btn-primary" onclick="pipelineStages.toggleClockPlay()">
+                  ${this._clockPlayTimer ? "Pause" : "Spin"}
+                </button>
+                <input id="ropePosSlider" type="range" min="0" max="${Math.max(0, tokens.length - 1)}" value="${this.ropeSelectedPos}" oninput="pipelineStages.setRoPEPosition(this.value)" aria-label="Word seat position">
+                <span id="ropePosReadout" class="mono tabular-nums">#${this.ropeSelectedPos + 1} (${this.ropeSelectedPos * 36}&deg;)</span>
               </div>
             </div>
 
-            <div class="inset-panel" style="display:flex; flex-direction:column; justify-content:space-between; gap:14px;">
+            <div class="inset-panel story-order-panel">
               <div id="ropeExplainPanel"></div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <div class="order-action-row">
+                <button type="button" class="btn btn-sm btn-secondary" onclick="pipelineStages.toggleOrderSwap()">
+                  Swap &harr;
+                </button>
                 <button type="button" class="btn btn-sm btn-primary" onclick="pipelineStages.applyRoPETo3D()">
-                  ${this.ropeAppliedTo3D ? "Clock Spin ON in 3D Map ↑" : "See This Spin on the 3D Map ↑"}
+                  ${this.ropeAppliedTo3D ? "3D Spin: ON &uarr;" : "Send to 3D &uarr;"}
                 </button>
               </div>
             </div>
@@ -623,14 +663,12 @@ Meaning:            +1.0 = exact twins, 0.0 = strangers, -1.0 = opposites</pre>
 
         <details class="stage-deep-dive">
           <summary class="deep-dive-summary">
-            <span>Want the Nerdy AI Math? (Rotary Position Embeddings / RoPE)</span>
+            <span>Math Formula &middot; RoPE</span>
             <span class="mono">+</span>
           </summary>
           <div class="deep-dive-content">
-            <p>RoPE pairs numbers (x<sub>2i</sub>, x<sub>2i+1</sub>) inside each word and rotates them by angle m &times; &theta;<sub>i</sub>, where m is the word's seat index. Because it uses rotation, two words always know how many seats apart they are!</p>
-            <pre class="formula-block">x'_2i     = x_2i &middot; cos(m&theta;_i) &minus; x_(2i+1) &middot; sin(m&theta;_i)
-x'_(2i+1) = x_2i &middot; sin(m&theta;_i) + x_(2i+1) &middot; cos(m&theta;_i)
-Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minus; n)</pre>
+            <pre class="formula-block">x'_2i = x_2i cos(m&theta;) &minus; x_(2i+1) sin(m&theta;)
+x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
           </div>
         </details>
       </div>
@@ -641,11 +679,13 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
 
   setRoPEMode(mode) {
     this.ropeMode = mode;
+    this.app.markStageExplored(3);
     this.app.renderStageById(3);
   }
 
   setRoPEPosition(pos) {
     this.ropeSelectedPos = parseInt(pos, 10) || 0;
+    this.app.markStageExplored(3);
     const slider = document.getElementById("ropePosSlider");
     if (slider) slider.value = String(this.ropeSelectedPos);
     const chips = document.getElementById("ropeSlotChips");
@@ -660,6 +700,7 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
 
   applyRoPETo3D() {
     this.ropeAppliedTo3D = !this.ropeAppliedTo3D;
+    this.app.markStageExplored(3);
     if (window.vectorView) {
       window.vectorView.updateTokens(this.app.tokens, this.app.hyperparams.d_model, this.ropeAppliedTo3D ? 25 : 0);
       window.vectorView.fitCameraToScene();
@@ -669,6 +710,27 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
     this.app.setActiveStage(2);
   }
 
+  toggleOrderSwap() {
+    this.orderSwapped = !this.orderSwapped;
+    this.app.markStageExplored(3);
+    this.updateStage3Visuals();
+  }
+
+  toggleClockPlay() {
+    this.app.markStageExplored(3);
+    if (this._clockPlayTimer) {
+      clearInterval(this._clockPlayTimer);
+      this._clockPlayTimer = null;
+      this.app.renderStageById(3);
+      return;
+    }
+    this._clockPlayTimer = setInterval(() => {
+      const len = Math.max(1, this.app.tokens.length);
+      this.setRoPEPosition((this.ropeSelectedPos + 1) % len);
+    }, 650);
+    this.app.renderStageById(3);
+  }
+
   updateStage3Visuals() {
     const tokens = this.app.tokens;
     const pos = Math.min(this.ropeSelectedPos, Math.max(0, tokens.length - 1));
@@ -676,46 +738,55 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
 
     const readout = document.getElementById("ropePosReadout");
     if (readout) {
-      readout.innerHTML = `Seat #${pos + 1} "${this.esc(tok.text)}" (${pos * 36}&deg;)`;
+      readout.innerHTML = `#${pos + 1} (${pos * 36}&deg;)`;
+    }
+    const pill = document.getElementById("stage3AnglePill");
+    if (pill) {
+      pill.innerHTML = `#${pos + 1} &middot; ${pos * 36}&deg;`;
     }
 
     const panel = document.getElementById("ropeExplainPanel");
     if (panel) {
+      const firstWord = this.orderSwapped ? "Fox" : "Dog";
+      const secondWord = this.orderSwapped ? "dog" : "fox";
+      const firstClass = this.orderSwapped ? "is-b" : "is-a";
+      const secondClass = this.orderSwapped ? "is-a" : "is-b";
+
       if (this.ropeMode === "none") {
         panel.innerHTML = `
-          <div class="section-label" style="margin-bottom:8px;">Uh-oh! Word Soup Mode</div>
-          <p style="font-size:13px; color:var(--ink-secondary); margin-bottom:10px;">
-            Without seat numbers, all your words get dumped into one messy pile—the AI has no clue who came first!
-          </p>
-          <div class="stat-cell" style="margin-bottom:8px;">
-            <div class="stat-cell-label">"dog chases fox" vs "fox chases dog"</div>
-            <div class="stat-cell-value" style="color:var(--rose);">Look 100% identical to the AI!</div>
-          </div>
-          <p style="font-size:12px; color:var(--ink-muted);">Click <strong>Spinning Clocks (RoPE)</strong> to put every word back in its right seat.</p>
-        `;
-      } else if (this.ropeMode === "sinusoidal") {
-        const pe = MathEngine.sinusoidalPE(tokens.length, 6)[pos] || [];
-        panel.innerHTML = `
-          <div class="section-label" style="margin-bottom:8px;">Music Wave Stamp at Seat #${pos + 1}</div>
-          <p style="font-size:13px; color:var(--ink-secondary); margin-bottom:10px;">
-            Older AIs (from 2017) added wavy musical ripples of different speeds onto <strong>"${this.esc(tok.text)}"</strong> so every seat gets a unique barcode:
-          </p>
-          <div class="stat-cell">
-            <div class="stat-cell-label">Wave stamp added to this word</div>
-            <div class="mono tabular-nums" style="font-size:12px; color:var(--ink-primary); margin-top:4px;">
-              [${pe.map(v => (v >= 0 ? "+" : "") + v.toFixed(2)).join(", ")}]
+          <div class="order-visual-demo is-broken">
+            <div class="order-demo-head is-danger">Order OFF &middot; Word Soup</div>
+            <div class="order-scene-row is-flipped-pop">
+              <span class="order-pill">? ${firstWord.toLowerCase()}</span>
+              <span class="order-pill">? chases</span>
+              <span class="order-pill">? ${secondWord}</span>
             </div>
+            <div class="order-equals-badge is-danger">Swap makes zero difference</div>
           </div>
         `;
       } else {
+        const modeTitle = this.ropeMode === "sinusoidal"
+          ? `Wave #${pos + 1}`
+          : `Seat #${pos + 1} · ${pos * 36}°`;
         panel.innerHTML = `
-          <div class="section-label" style="margin-bottom:8px;">Clock Hand for Seat #${pos + 1}</div>
-          <p style="font-size:13px; color:var(--ink-secondary); margin-bottom:10px;">
-            The word <strong>"${this.esc(tok.text)}"</strong> sits in Seat <strong>#${pos + 1}</strong>, so its clock hand turns <strong>${pos * 36}&deg;</strong>. Every step down the line clicks another 36&deg; forward—so neighbors are always easy to spot!
-          </p>
-          <div class="stat-cell">
-            <div class="stat-cell-label">Steps from the first word ("${this.esc(tokens[0].text)}")</div>
-            <div class="stat-cell-value tabular-nums">${pos} ${pos === 1 ? "seat" : "seats"} away (${pos * 36}&deg; turn)</div>
+          <div class="order-visual-demo">
+            <div class="order-demo-head">${modeTitle}</div>
+            <div class="order-scene-row is-flipped-pop">
+              <span class="order-pill ${firstClass}">0&deg; ${firstWord}</span>
+              <span class="order-arrow">&rarr;</span>
+              <span class="order-pill">36&deg; chases</span>
+              <span class="order-arrow">&rarr;</span>
+              <span class="order-pill ${secondClass}">72&deg; ${secondWord}</span>
+            </div>
+            <button type="button" class="order-comic-strip is-clickable" onclick="pipelineStages.toggleOrderSwap()" title="Click to swap order">
+              <span class="comic-actor ${firstClass}">${firstWord}</span>
+              <span class="comic-motion" aria-hidden="true">━━▶</span>
+              <span class="comic-actor ${secondClass}">${secondWord.charAt(0).toUpperCase() + secondWord.slice(1)}</span>
+            </button>
+            <div class="order-selected-stat">
+              <strong class="mono">"${this.esc(tok.text)}"</strong>
+              <span class="mono tabular-nums">+${pos * 36}&deg;</span>
+            </div>
           </div>
         `;
       }
@@ -741,9 +812,9 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
       const plotW = w - padX * 2;
       const plotH = h - padY * 2;
       const pe = MathEngine.sinusoidalPE(Math.max(8, tokens.length), 6);
-      const colors = ["#38BDF8", "#34D399", "#FBBF24"];
+      const colors = ["#38BDF8", "#2DD4BF", "#FBBF24"];
 
-      ctx.strokeStyle = "#1E293B";
+      ctx.strokeStyle = "#263348";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(padX, padY + plotH / 2);
@@ -753,7 +824,7 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
       for (let dim = 0; dim < 3; dim++) {
         ctx.beginPath();
         ctx.strokeStyle = colors[dim];
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.4;
         const steps = 60;
         for (let s = 0; s <= steps; s++) {
           const p = (s / steps) * Math.max(1, tokens.length - 1);
@@ -768,7 +839,7 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
       }
 
       const cursorX = padX + (activePos / Math.max(1, tokens.length - 1)) * plotW;
-      ctx.strokeStyle = "#FFFFFF";
+      ctx.strokeStyle = "#F8FAFC";
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
       ctx.moveTo(cursorX, padY);
@@ -780,61 +851,76 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
         const val = pe[activePos] ? pe[activePos][dim * 2] : 0;
         const py = padY + plotH / 2 - val * (plotH * 0.38);
         ctx.beginPath();
-        ctx.arc(cursorX, py, 5, 0, Math.PI * 2);
+        ctx.arc(cursorX, py, 5.5, 0, Math.PI * 2);
         ctx.fillStyle = colors[dim];
         ctx.fill();
       }
 
-      ctx.fillStyle = "#E2E8F0";
+      ctx.fillStyle = "#F1F5F9";
       ctx.font = "600 12px 'JetBrains Mono', monospace";
-      ctx.fillText(`Seat #${activePos + 1}: "${tokens[activePos]?.text || ""}"`, Math.min(w - 165, Math.max(padX, cursorX - 35)), 18);
+      ctx.fillText(`Seat #${activePos + 1}: "${tokens[activePos]?.text || ""}"`, Math.min(w - 170, Math.max(padX, cursorX - 36)), 18);
       return;
     }
 
     if (this.ropeMode === "none") {
       const cx = w / 2;
       const cy = h / 2;
-      ctx.strokeStyle = "#334155";
+      ctx.strokeStyle = "#475569";
+      ctx.setLineDash([5, 5]);
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(cx, cy, 88, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 86, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.setLineDash([]);
 
       tokens.forEach((t, i) => {
-        const ox = cx + ((i % 3) - 1) * 18;
-        const oy = cy + (Math.floor(i / 3) - 1) * 18;
+        const ox = cx + ((i % 3) - 1) * 24;
+        const oy = cy + (Math.floor(i / 3) - 1) * 22;
         ctx.beginPath();
         ctx.arc(ox, oy, 7, 0, Math.PI * 2);
         ctx.fillStyle = i === activePos ? "#F87171" : "#64748B";
         ctx.fill();
-        ctx.fillStyle = "#E2E8F0";
+        ctx.fillStyle = "#F1F5F9";
         ctx.font = "11px 'JetBrains Mono', monospace";
         ctx.fillText(`"${t.text}"`, ox + 10, oy + 4);
       });
 
       ctx.fillStyle = "#F87171";
       ctx.font = "600 12px 'Plus Jakarta Sans', sans-serif";
-      ctx.fillText("All seats jumbled together — word order is lost!", 18, 24);
+      ctx.fillText("No seat clocks — every word floats in one pile!", 18, 22);
       return;
     }
 
     const cx = w / 2;
-    const cy = h / 2 + 6;
-    const radius = Math.min(cx, cy) - 46;
+    const cy = h / 2 + 4;
+    const radius = Math.min(cx, cy) - 44;
 
+    // Outer & inner clock rings
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = "#334155";
+    ctx.strokeStyle = "#3F3D36";
     ctx.lineWidth = 2;
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(cx, cy, radius * 0.58, 0, Math.PI * 2);
-    ctx.strokeStyle = "#1E293B";
+    ctx.arc(cx, cy, radius * 0.56, 0, Math.PI * 2);
+    ctx.strokeStyle = "#262520";
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
+    // Swept angle sector highlight from 12 o'clock to active seat
+    const stepRad = (36 * Math.PI) / 180;
+    if (activePos > 0) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius * 0.56, -Math.PI / 2, activePos * stepRad - Math.PI / 2);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(249, 115, 22, 0.18)";
+      ctx.fill();
+    }
+
+    // 12 o'clock reference
+    ctx.strokeStyle = "rgba(168, 162, 158, 0.28)";
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.moveTo(cx, cy);
@@ -842,7 +928,6 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
     ctx.stroke();
     ctx.setLineDash([]);
 
-    const stepRad = (36 * Math.PI) / 180;
     tokens.forEach((t, i) => {
       const angle = i * stepRad - Math.PI / 2;
       const x = cx + radius * Math.cos(angle);
@@ -852,29 +937,36 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(x, y);
-      ctx.strokeStyle = isSelected ? "#38BDF8" : "rgba(148, 163, 184, 0.35)";
-      ctx.lineWidth = isSelected ? 3 : 1.25;
+      ctx.strokeStyle = isSelected ? "#FB923C" : "rgba(168, 162, 158, 0.32)";
+      ctx.lineWidth = isSelected ? 3.5 : 1.3;
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.arc(x, y, isSelected ? 7 : 4, 0, Math.PI * 2);
-      ctx.fillStyle = isSelected ? "#34D399" : "#64748B";
+      ctx.arc(x, y, isSelected ? 7.5 : 4.2, 0, Math.PI * 2);
+      ctx.fillStyle = isSelected ? "#34D399" : "#78716C";
       ctx.fill();
 
-      const lx = cx + (radius + 16) * Math.cos(angle);
-      const ly = cy + (radius + 16) * Math.sin(angle);
-      ctx.fillStyle = isSelected ? "#FFFFFF" : "#94A3B8";
+      const lx = cx + (radius + 18) * Math.cos(angle);
+      const ly = cy + (radius + 18) * Math.sin(angle);
+      ctx.fillStyle = isSelected ? "#FFFFFF" : "#A8A29E";
       ctx.font = isSelected ? "bold 12px 'JetBrains Mono', monospace" : "11px 'JetBrains Mono', monospace";
       ctx.textAlign = Math.cos(angle) > 0.2 ? "left" : Math.cos(angle) < -0.2 ? "right" : "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(`${i + 1}:${t.text}`, lx, ly);
+      ctx.fillText(`#${i + 1} ${t.text}`, lx, ly);
     });
+
+    // Center hub
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = "#F5F4EE";
+    ctx.fill();
+
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
   }
 
   // ========================================================================
-  // CHAPTER 4: Word Detective (Self-Attention Strings & Grid)
+  // CHAPTER 4: Word Detective (Interactive Clue Board + Auto-Tour)
   // ========================================================================
   renderStage4(container) {
     const tokens = this.app.tokens;
@@ -908,59 +1000,48 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
       weight: rawWeights[idx] || 0
     })).sort((a, b) => b.weight - a.weight);
 
-    const topTwo = attendedTokens.slice(0, 2);
-    const topTwoSummary = topTwo.length >= 2
-      ? `<strong>"${this.esc(topTwo[0].token)}"</strong> (${Math.round(topTwo[0].weight * 100)}%) and <strong>"${this.esc(topTwo[1].token)}"</strong> (${Math.round(topTwo[1].weight * 100)}%)`
-      : topTwo.length === 1
-        ? `itself (<strong>"${this.esc(topTwo[0].token)}"</strong>, 100%)`
-        : "earlier words";
-    const futureHiddenCount = this.causalMaskEnabled ? Math.max(0, tokens.length - 1 - selectedIdx) : 0;
+    const topClue = attendedTokens.find(x => x.index !== selectedIdx) || attendedTokens[0];
+
+    const stackedColors = ["#F97316", "#10B981", "#EAB308", "#0EA5E9", "#EF4444", "#84CC16"];
 
     container.innerHTML = `
       <div class="stage-card">
-        <div class="stage-top-header">
-          <div class="stage-kicker">Chapter 4 of 7 &middot; Word Detective (Self-Attention)</div>
-          <h2 class="stage-title">Playing Word Detective to connect clues</h2>
-          <div class="stage-summary-box">
-            <strong>Imagine this:</strong> A word by itself can be tricky—what does "jumps" mean without knowing <em>who</em> is jumping? Here, every word acts like a detective looking back through earlier words and tying glowing strings to its biggest clues!
+        <div class="stage-header-compact stage-header-row">
+          <div>
+            <div class="stage-kicker">04 &middot; Self-Attention (Word Detective)</div>
+            <h2 class="stage-title">Weight clues from past tokens</h2>
           </div>
-          ${this.renderHandoff(
-            "From Chapter 3",
-            `${tokens.length} ordered word vectors`,
-            "Ties glowing clue strings between related words",
-            "Clue-Rich Word",
-            `"${currentToken.text}" → ${topTwo[0] ? `"${topTwo[0].token}" (${Math.round(topTwo[0].weight * 100)}%)` : "blended"}`
-          )}
+          <span class="stage-live-pill mono">${topClue ? `"${this.esc(topClue.token)}" ${Math.round(topClue.weight * 100)}%` : "Self"}</span>
         </div>
 
         <div class="stage-visual-container">
-          ${this.renderTryThis("Click any word in the sentence below! Thicker teal strings mean stronger clues. Try toggling <strong>No Peeking Ahead</strong> to see how the AI stops words from cheating by reading the future.")}
-
           <div class="stage-toolbar-row">
-            <div class="segmented-group" role="group" aria-label="Choose Detective">
-              <button type="button" class="seg-btn ${this.selectedHeadIndex === 0 ? "is-active" : ""}" onclick="pipelineStages.setAttnHead(0)">Detective 1: Grammar &amp; Flow</button>
-              <button type="button" class="seg-btn ${this.selectedHeadIndex === 1 ? "is-active" : ""}" onclick="pipelineStages.setAttnHead(1)">Detective 2: Who &amp; Action</button>
+            <div class="segmented-group" role="group" aria-label="Attention head">
+              <button type="button" class="seg-btn ${this.selectedHeadIndex === 0 ? "is-active" : ""}" onclick="pipelineStages.setAttnHead(0)">Head 1 · Syntax</button>
+              <button type="button" class="seg-btn ${this.selectedHeadIndex === 1 ? "is-active" : ""}" onclick="pipelineStages.setAttnHead(1)">Head 2 · Semantics</button>
             </div>
 
-            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-              <div class="segmented-group" role="group" aria-label="Clue View Mode">
-                <button type="button" class="seg-btn ${this.attnViewMode === "arcs" ? "is-active" : ""}" onclick="pipelineStages.setAttnViewMode('arcs')">Clue Strings</button>
-                <button type="button" class="seg-btn ${this.attnViewMode === "matrix" ? "is-active" : ""}" onclick="pipelineStages.setAttnViewMode('matrix')">Clue Grid</button>
+            <div class="inline-controls">
+              <button type="button" class="btn btn-sm btn-primary" onclick="pipelineStages.toggleAttnTour()">
+                ${this._attnTourTimer ? "Stop" : "Auto-Scan"}
+              </button>
+              <div class="segmented-group" role="group" aria-label="Attention view mode">
+                <button type="button" class="seg-btn ${this.attnViewMode === "arcs" ? "is-active" : ""}" onclick="pipelineStages.setAttnViewMode('arcs')">Arcs</button>
+                <button type="button" class="seg-btn ${this.attnViewMode === "matrix" ? "is-active" : ""}" onclick="pipelineStages.setAttnViewMode('matrix')">Matrix</button>
               </div>
               <button type="button" class="btn btn-sm ${this.causalMaskEnabled ? "btn-teal" : ""}" onclick="pipelineStages.toggleCausalMask()">
-                ${this.causalMaskEnabled ? "No Peeking Ahead: ON" : "No Peeking Ahead: OFF"}
+                ${this.causalMaskEnabled ? "Causal Mask: ON" : "Causal Mask: OFF"}
               </button>
             </div>
           </div>
 
-          <div class="live-insight-bar">
-            <strong>Detective Report:</strong> Right now, <strong>"${this.esc(currentToken.text)}"</strong> is gathering its strongest clues from ${topTwoSummary}.
-            ${futureHiddenCount > 0 ? `The ${futureHiddenCount} word${futureHiddenCount === 1 ? "" : "s"} after it are greyed out so it can't cheat by peeking ahead!` : "Because it can see every word up to here, it blends clues from the whole sentence."}
-          </div>
-
           ${this.attnViewMode === "arcs" ? `
-            <div class="attn-stage-area" id="attnStageArea">
-              <div style="font-size:12px; color:var(--ink-muted);">Blue = detective word · Teal = biggest clue words it is grabbing:</div>
+            <div class="detective-board" id="attnStageArea">
+              <div class="detective-legend">
+                <span class="legend-chip"><span class="quick-dot is-orange"></span>Query (Q): "${this.esc(currentToken.text)}"</span>
+                <span class="legend-chip"><span class="quick-dot is-teal"></span>Keys (K)</span>
+                ${this.causalMaskEnabled && selectedIdx < tokens.length - 1 ? `<span class="legend-chip">⊘ Future masked</span>` : ""}
+              </div>
               <div class="sentence-ribbon" id="attnTokenRibbon">
                 ${tokens.map((t, idx) => {
                   const w = rawWeights[idx] || 0;
@@ -972,7 +1053,10 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
                       class="word-pill-attn ${idx === selectedIdx ? "active" : ""} ${isConnected ? "connected" : ""} ${isFutureMasked ? "is-masked" : ""}"
                       data-attn-idx="${idx}"
                       onclick="pipelineStages.selectToken(${idx})"
-                    >"${this.esc(t.text)}"</button>
+                    >
+                      <span>"${this.esc(t.text)}"</span>
+                      ${!isFutureMasked ? `<span class="word-weight-sub tabular-nums">${Math.round(w * 100)}%</span>` : `<span class="word-weight-sub">⊘</span>`}
+                    </button>
                   `;
                 }).join("")}
               </div>
@@ -980,26 +1064,26 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
             </div>
           ` : `
             <div class="inset-panel attn-matrix-wrap">
-              <div class="section-label" style="margin-bottom:8px;">Full Detective Clue Grid (Row = Asking word, Column = Clue word)</div>
+              <div class="section-label" style="margin-bottom:8px;">Clue Grid</div>
               <table class="attn-matrix-table">
                 <thead>
                   <tr>
-                    <th>Asking &darr; / Clue &rarr;</th>
+                    <th>Row &rarr; Col</th>
                     ${tokens.map((t, j) => `<th>${j + 1}:"${this.esc(t.text)}"</th>`).join("")}
                   </tr>
                 </thead>
                 <tbody>
                   ${tokens.map((rowTok, i) => `
                     <tr>
-                      <th style="text-align:left; background:${i === selectedIdx ? "var(--accent-primary-soft)" : "transparent"};">${i + 1}:"${this.esc(rowTok.text)}"</th>
+                      <th class="${i === selectedIdx ? "is-selected-row" : ""}">${i + 1}:"${this.esc(rowTok.text)}"</th>
                       ${tokens.map((_, j) => {
                         const blocked = this.causalMaskEnabled && j > i;
                         const val = (weightsMatrix[i] && weightsMatrix[i][j]) || 0;
                         const pct = Math.round(val * 100);
-                        const bgAlpha = Math.max(0.06, val * 0.85);
+                        const bgAlpha = Math.max(0.08, val * 0.85);
                         return blocked
-                          ? `<td class="attn-matrix-cell is-blocked">Hidden</td>`
-                          : `<td class="attn-matrix-cell tabular-nums" onclick="pipelineStages.selectToken(${i})" style="background:rgba(37, 99, 235, ${bgAlpha.toFixed(2)}); color:${val > 0.45 ? "#FFFFFF" : "var(--ink-primary)"};">${pct}%</td>`;
+                          ? `<td class="attn-matrix-cell is-blocked">&mdash;</td>`
+                          : `<td class="attn-matrix-cell tabular-nums" onclick="pipelineStages.selectToken(${i})" style="background:rgba(249, 115, 22, ${bgAlpha.toFixed(2)}); color:${val > 0.42 ? "#FFFFFF" : "var(--ink-primary)"};">${pct}%</td>`;
                       }).join("")}
                     </tr>
                   `).join("")}
@@ -1009,31 +1093,36 @@ Cool trick: &lt;Rotate(q, m), Rotate(k, n)&gt; only depends on distance (m &minu
           `}
 
           <div class="inset-panel">
-            <div class="section-label" style="margin-bottom:12px;">
-              How much attention <span class="mono">"${this.esc(currentToken.text)}"</span> pays to each word (always adds up to 100%)
+            <div class="stage-toolbar-row" style="margin-bottom:8px;">
+              <span class="section-label">Attention Weights (100%) &middot; <span class="mono">"${this.esc(currentToken.text)}"</span></span>
+              <span class="mono tabular-nums" style="font-size:11px; color:var(--ink-muted);">Tap row to inspect</span>
             </div>
-            ${attendedTokens.map(item => `
-              <div class="attn-item-row">
-                <span class="mono" style="font-size:13px; font-weight:600; color:${item.index === selectedIdx ? "var(--accent-primary)" : "var(--ink-primary)"};">"${this.esc(item.token)}"</span>
-                <div class="attn-progress-bar">
-                  <div class="attn-progress-fill" style="width:${Math.round(item.weight * 100)}%; background:${item.index === selectedIdx ? "var(--accent-primary)" : "var(--teal)"};"></div>
-                </div>
-                <span class="mono tabular-nums" style="text-align:right; font-size:12px; font-weight:600;">${Math.round(item.weight * 100)}%</span>
-              </div>
-            `).join("")}
+            <div class="attn-stacked-bar" aria-hidden="true">
+              ${attendedTokens.slice(0, 6).map((item, idx) => `
+                <span class="attn-stacked-seg" style="width:${Math.max(4, Math.round(item.weight * 100))}%; background:${item.index === selectedIdx ? "var(--accent-primary)" : stackedColors[(idx + 1) % stackedColors.length]};" title="${this.esc(item.token)}: ${Math.round(item.weight * 100)}%"></span>
+              `).join("")}
+            </div>
+            <div class="clue-bars-grid">
+              ${attendedTokens.slice(0, 6).map(item => `
+                <button type="button" class="attn-item-row is-clickable" onclick="pipelineStages.selectToken(${item.index})">
+                  <span class="mono" style="font-size:12.5px; font-weight:600; color:${item.index === selectedIdx ? "var(--accent-primary)" : "var(--ink-primary)"};">"${this.esc(item.token)}"</span>
+                  <span class="attn-progress-bar">
+                    <span class="attn-progress-fill" style="display:block; width:${Math.max(3, Math.round(item.weight * 100))}%; background:${item.index === selectedIdx ? "var(--accent-primary)" : "var(--teal)"};"></span>
+                  </span>
+                  <span class="mono tabular-nums" style="text-align:right; font-size:12px; font-weight:600;">${Math.round(item.weight * 100)}%</span>
+                </button>
+              `).join("")}
+            </div>
           </div>
         </div>
 
         <details class="stage-deep-dive">
           <summary class="deep-dive-summary">
-            <span>Want the Nerdy AI Math? (Query, Key, Value &amp; Causal Mask)</span>
+            <span>Math Formula &middot; Self-Attention</span>
             <span class="mono">+</span>
           </summary>
           <div class="deep-dive-content">
-            <p>Each word makes three mini-vectors: a <strong>Query</strong> ("what clue am I hunting for?"), a <strong>Key</strong> ("what clue am I holding?"), and a <strong>Value</strong> ("here is the info I'll share if we match!").</p>
-            <pre class="formula-block">Attention(Q, K, V) = softmax((Q &middot; K^T) / &radic;d_k + Mask) &middot; V
-Head width d_k     = d_model / n_heads = ${hp.d_model} / ${hp.n_heads} = ${Math.floor(hp.d_model / hp.n_heads)}
-No-Peeking Mask    = 0 for past words, -&infin; for future words</pre>
+            <pre class="formula-block">Attention(Q, K, V) = softmax((Q &middot; K^T) / &radic;d_k + Mask) &middot; V</pre>
           </div>
         </details>
       </div>
@@ -1061,11 +1150,14 @@ No-Peeking Mask    = 0 for past words, -&infin; for future words</pre>
 
     const svgRect = svg.getBoundingClientRect();
     const width = Math.max(300, svgRect.width || 600);
-    const height = 92;
+    const height = 96;
     svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
     const srcRect = srcBtn.getBoundingClientRect();
     const x1 = srcRect.left - svgRect.left + srcRect.width / 2;
+    const isLight = this.isLightTheme();
+    const selfStroke = isLight ? "#EA580C" : "#FB923C";
+    const clueStroke = isLight ? "#059669" : "#34D399";
 
     const paths = [];
     buttons.forEach((btn, j) => {
@@ -1075,39 +1167,70 @@ No-Peeking Mask    = 0 for past words, -&infin; for future words</pre>
       const dstRect = btn.getBoundingClientRect();
       const x2 = dstRect.left - svgRect.left + dstRect.width / 2;
       const dist = Math.abs(x1 - x2);
-      const curveDepth = Math.min(height - 10, Math.max(28, dist * 0.34 + 24));
-      const strokeColor = j === selectedIdx ? "#2563EB" : "#0D9488";
-      const strokeWidth = Math.max(2, weight * 11);
-      const opacity = Math.max(0.35, Math.min(0.95, weight * 2.2));
+      const curveDepth = Math.min(height - 8, Math.max(30, dist * 0.34 + 26));
+      const strokeColor = j === selectedIdx ? selfStroke : clueStroke;
+      const strokeWidth = Math.max(2, weight * 12);
+      const opacity = Math.max(0.35, Math.min(0.95, weight * 2.3));
 
       if (j === selectedIdx) {
-        paths.push(`<path d="M ${x1 - 8} 4 C ${x1 - 14} 38, ${x1 + 14} 38, ${x1 + 8} 4" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth.toFixed(1)}" opacity="${opacity.toFixed(2)}" stroke-linecap="round"/>`);
+        const dSelf = `M ${x1 - 9} 4 C ${x1 - 16} 42, ${x1 + 16} 42, ${x1 + 9} 4`;
+        paths.push(`<path d="${dSelf}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth.toFixed(1)}" opacity="${opacity.toFixed(2)}" stroke-linecap="round"/>`);
       } else {
-        paths.push(`<path d="M ${x1} 4 Q ${(x1 + x2) / 2} ${curveDepth} ${x2} 4" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth.toFixed(1)}" opacity="${opacity.toFixed(2)}" stroke-linecap="round"/>`);
+        // Direction from clue word (x2) INTO asking word (x1) so signal particles visibly feed into the active word!
+        const dClue = `M ${x2.toFixed(1)} 4 Q ${((x1 + x2) / 2).toFixed(1)} ${curveDepth.toFixed(1)} ${x1.toFixed(1)} 4`;
+        const pathId = `clue-arc-${j}`;
+        paths.push(`<path id="${pathId}" class="clue-arc-path" d="${dClue}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth.toFixed(1)}" opacity="${opacity.toFixed(2)}" stroke-linecap="round"/>`);
+        if (weight > 0.08) {
+          const dur = Math.max(0.9, 2.3 - weight * 1.4).toFixed(2);
+          paths.push(`
+            <circle r="${Math.min(5.2, 2.8 + weight * 4).toFixed(1)}" fill="${strokeColor}">
+              <animateMotion dur="${dur}s" repeatCount="indefinite" path="${dClue}"/>
+            </circle>
+          `);
+        }
       }
-      paths.push(`<circle cx="${x2}" cy="5" r="3.2" fill="${strokeColor}" opacity="${opacity.toFixed(2)}"/>`);
+      paths.push(`<circle cx="${x2.toFixed(1)}" cy="5" r="3.6" fill="${strokeColor}" opacity="${opacity.toFixed(2)}"/>`);
     });
 
     svg.innerHTML = paths.join("");
   }
 
+  toggleAttnTour() {
+    this.app.markStageExplored(4);
+    if (this._attnTourTimer) {
+      clearInterval(this._attnTourTimer);
+      this._attnTourTimer = null;
+      this.app.renderStageById(4);
+      return;
+    }
+    this._attnTourTimer = setInterval(() => {
+      const len = Math.max(1, this.app.tokens.length);
+      const next = (this.selectedTokenIndex + 1) % len;
+      this.selectToken(next);
+    }, 900);
+    this.app.renderStageById(4);
+  }
+
   setAttnHead(idx) {
     this.selectedHeadIndex = idx;
+    this.app.markStageExplored(4);
     this.app.renderStageById(4);
   }
 
   setAttnViewMode(mode) {
     this.attnViewMode = mode;
+    this.app.markStageExplored(4);
     this.app.renderStageById(4);
   }
 
   toggleCausalMask() {
     this.causalMaskEnabled = !this.causalMaskEnabled;
+    this.app.markStageExplored(4);
     this.app.renderStageById(4);
   }
 
   // ========================================================================
-  // CHAPTER 5: 3 Quick Brain Chores (Norm, Photocopy Shortcut & Fact Cabinet)
+  // CHAPTER 5: 3 Brain Chores (Equalizer, SVG Bypass Highway, Glowing Bulbs)
   // ========================================================================
   renderStage5(container) {
     const activeTab = this.stage5Tab || "norm";
@@ -1116,126 +1239,135 @@ No-Peeking Mask    = 0 for past words, -&infin; for future words</pre>
 
     container.innerHTML = `
       <div class="stage-card">
-        <div class="stage-top-header">
-          <div class="stage-kicker">Chapter 5 of 7 &middot; Inside One Thinking Floor</div>
-          <h2 class="stage-title">3 quick brain chores that keep thinking sharp</h2>
-          <div class="stage-summary-box">
-            <strong>Imagine this:</strong> Right after playing Word Detective, each thinking floor does three super-fast chores before passing the word upstairs: <strong>(1)</strong> calm down any wild numbers, <strong>(2)</strong> keep a photocopy of the original word so nothing gets erased, and <strong>(3)</strong> check its giant fact cabinet.
+        <div class="stage-header-compact stage-header-row">
+          <div>
+            <div class="stage-kicker">05 &middot; Transformer Block</div>
+            <h2 class="stage-title">Norm &middot; Residual &middot; Feed-Forward</h2>
           </div>
-          ${this.renderHandoff(
-            "From Chapter 4",
-            `Clue-blended "${activeTok.text}"`,
-            "Calm → Photocopy → Fact Check",
-            "Smarter Word",
-            "Ready to go upstairs"
-          )}
+          <span class="stage-live-pill mono">"${this.esc(activeTok.text)}"</span>
         </div>
 
         <div class="stage-visual-container">
-          ${this.renderTryThis("Click each of the <strong>3 brain chores below</strong> to test what happens if numbers get too huge, if the photocopy shortcut breaks, or when fact neurons light up!")}
-
-          <!-- Interactive 3-Chore Tabs -->
-          <div class="block-stepper" role="tablist" aria-label="Three brain chores">
+          <!-- Interactive 3-Station Visual Selector -->
+          <div class="block-stepper" role="tablist" aria-label="Transformer block sub-layers">
             <button type="button" role="tab" aria-selected="${activeTab === "norm"}" class="block-step-btn ${activeTab === "norm" ? "is-active" : ""}" onclick="pipelineStages.setStage5Tab('norm')">
-              <span class="block-step-kicker">Chore 1 &middot; Volume Knob</span>
-              <span class="block-step-title">1. Calm Wild Numbers</span>
-              <span class="block-step-desc">Turns down giant spikes so math never explodes</span>
+              <span class="block-step-kicker">01 · Normalization</span>
+              <span class="block-step-title">RMSNorm Limiter</span>
             </button>
             <button type="button" role="tab" aria-selected="${activeTab === "skip"}" class="block-step-btn ${activeTab === "skip" ? "is-active" : ""}" onclick="pipelineStages.setStage5Tab('skip')">
-              <span class="block-step-kicker">Chore 2 &middot; Backup Lane</span>
-              <span class="block-step-title">2. Keep a Photocopy</span>
-              <span class="block-step-desc">Adds sticky notes instead of erasing the page</span>
+              <span class="block-step-kicker">02 · Residual Skip</span>
+              <span class="block-step-title">Bypass Highway</span>
             </button>
             <button type="button" role="tab" aria-selected="${activeTab === "ffn"}" class="block-step-btn ${activeTab === "ffn" ? "is-active" : ""}" onclick="pipelineStages.setStage5Tab('ffn')">
-              <span class="block-step-kicker">Chore 3 &middot; Fact Cabinet</span>
-              <span class="block-step-title">3. Check Fact Cabinet</span>
-              <span class="block-step-desc">Lights up memory neurons to recall world facts</span>
+              <span class="block-step-kicker">03 · Feed-Forward (FFN)</span>
+              <span class="block-step-title">Memory Neurons</span>
             </button>
           </div>
 
           ${activeTab === "norm" ? `
             <div class="inset-panel">
               <div class="stage-toolbar-row" style="margin-bottom:12px;">
-                <div>
-                  <div class="section-label">Wild Spike Tamer: Drag the slider to blast a giant number into Bar #2</div>
-                  <div style="font-size:12px; color:var(--ink-muted);">Watch the right-hand chart stay calm and balanced even when the left bar goes crazy!</div>
-                </div>
-                <div class="segmented-group" role="group" aria-label="Volume knob style">
-                  <button type="button" class="seg-btn ${this.normType === "rmsnorm" ? "is-active" : ""}" onclick="pipelineStages.setNormType('rmsnorm')">RMSNorm (Fast)</button>
+                <span class="section-label">Tap any bar to spike &middot; <span id="spikeBarTag" class="mono">d${this.spikeBarIndex}</span></span>
+                <div class="segmented-group" role="group" aria-label="Normalization method">
+                  <button type="button" class="seg-btn ${this.normType === "rmsnorm" ? "is-active" : ""}" onclick="pipelineStages.setNormType('rmsnorm')">RMSNorm</button>
                   <button type="button" class="seg-btn ${this.normType === "layernorm" ? "is-active" : ""}" onclick="pipelineStages.setNormType('layernorm')">LayerNorm</button>
                 </div>
               </div>
 
-              <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
-                <label for="normSpikeSlider" style="font-size:13px; font-weight:600; white-space:nowrap;">Blast Spike (d2):</label>
-                <input id="normSpikeSlider" type="range" min="-5.0" max="5.0" step="0.5" value="${this.normSpikeValue}" oninput="pipelineStages.setNormSpike(this.value)" style="flex:1; min-width:160px;">
-                <span id="normSpikeReadout" class="mono tabular-nums" style="font-size:13px; font-weight:600; min-width:56px; text-align:right;">+${this.normSpikeValue.toFixed(1)}</span>
-                <span id="normRmsReadout" class="mono tabular-nums" style="font-size:12px; color:var(--teal); font-weight:600;"></span>
+              <div class="spike-control-row">
+                <label for="normSpikeSlider">Spike:</label>
+                <input id="normSpikeSlider" type="range" min="-5.0" max="5.0" step="0.5" value="${this.normSpikeValue}" oninput="pipelineStages.setNormSpike(this.value)">
+                <span id="normSpikeReadout" class="mono tabular-nums spike-val">+${this.normSpikeValue.toFixed(1)}</span>
+                <button type="button" class="btn btn-sm btn-secondary" onclick="pipelineStages.blastRandomSpike()">Blast!</button>
+                <span id="normRmsReadout" class="mono tabular-nums spike-rms"></span>
               </div>
 
               <div class="norm-compare-grid">
                 <div class="bar-chart-card">
-                  <div style="font-size:12px; font-weight:600; color:var(--rose); margin-bottom:8px;">Before Calming (Wild Spike!)</div>
-                  <div id="normBeforeChart" class="vector-dna-list"></div>
+                  <div class="eq-title is-danger">Before &middot; Raw</div>
+                  <div id="normBeforeChart" class="eq-bars-stage"></div>
                 </div>
                 <div class="bar-chart-card">
-                  <div style="font-size:12px; font-weight:600; color:var(--teal); margin-bottom:8px;">After ${this.normType === "rmsnorm" ? "RMSNorm" : "LayerNorm"} (Nice &amp; Balanced)</div>
-                  <div id="normAfterChart" class="vector-dna-list"></div>
+                  <div class="eq-title is-safe">After &middot; ${this.normType === "rmsnorm" ? "RMSNorm" : "LayerNorm"}</div>
+                  <div id="normAfterChart" class="eq-bars-stage"></div>
                 </div>
               </div>
             </div>
           ` : activeTab === "skip" ? `
-            <div class="inset-panel" style="display:flex; flex-direction:column; gap:14px;">
+            <div class="inset-panel skip-visual-panel">
               <div class="skip-diagram-row">
-                <div>
-                  <div class="section-label">Photocopy Shortcut: <span class="mono">New Thought = Original Word + Fresh Clues</span></div>
-                  <div style="font-size:13px; color:var(--ink-secondary); margin-top:4px;">Just like adding sticky notes to your homework instead of erasing the whole page!</div>
-                </div>
-                <button type="button" class="btn btn-sm ${this.skipConnectionEnabled ? "btn-teal" : ""}" onclick="pipelineStages.toggleSkip()">
-                  ${this.skipConnectionEnabled ? "Photocopy Lane: ON (Safe)" : "Photocopy Lane: OFF (Memory Fades!)"}
+                <span class="section-label">Residual Connection &middot; <span class="mono">"${this.esc(activeTok.text)}"</span></span>
+                <button type="button" class="btn btn-sm ${this.skipConnectionEnabled ? "btn-teal" : "btn-danger"}" onclick="pipelineStages.toggleSkip()">
+                  ${this.skipConnectionEnabled ? "Residual: ON" : "Residual: CUT"}
                 </button>
               </div>
-              <div class="live-insight-bar" id="skipStatusText"></div>
-              <div class="inspector-grid">
-                <div class="stat-cell">
-                  <div class="stat-cell-label">Original Word Memory</div>
-                  <div class="stat-cell-value tabular-nums" style="color:${this.skipConnectionEnabled ? "var(--teal)" : "var(--rose)"};">${this.skipConnectionEnabled ? "100% Safe" : "Fading Away!"}</div>
-                </div>
-                <div class="stat-cell">
-                  <div class="stat-cell-label">Spotlight Word</div>
-                  <div class="stat-cell-value">"${this.esc(activeTok.text)}"</div>
-                </div>
-                <div class="stat-cell">
-                  <div class="stat-cell-label">Superpower Unlocked</div>
-                  <div class="stat-cell-value" style="font-size:12.5px; font-family:var(--font-body); font-weight:500;">Lets AI stack 32–80+ floors</div>
-                </div>
+
+              <!-- Live Animated SVG Circuit Diagram -->
+              <div class="skip-svg-wrap">
+                <svg viewBox="0 0 620 175" class="skip-svg" role="img" aria-label="Animated residual connection diagram">
+                  <path d="M 122 92 C 160 22, 430 22, 476 80" fill="none"
+                    stroke="${this.skipConnectionEnabled ? "var(--teal)" : "var(--rose)"}"
+                    stroke-width="${this.skipConnectionEnabled ? "4" : "2.5"}"
+                    stroke-dasharray="${this.skipConnectionEnabled ? "0" : "7 6"}"
+                    stroke-linecap="round"/>
+                  ${this.skipConnectionEnabled ? `
+                    <circle r="5.5" fill="var(--teal)">
+                      <animateMotion dur="1.7s" repeatCount="indefinite" path="M 122 92 C 160 22, 430 22, 476 80"/>
+                    </circle>
+                    <circle r="4" fill="var(--teal)" opacity="0.65">
+                      <animateMotion dur="1.7s" begin="0.85s" repeatCount="indefinite" path="M 122 92 C 160 22, 430 22, 476 80"/>
+                    </circle>
+                  ` : ""}
+                  <text x="300" y="24" text-anchor="middle" font-size="12" font-weight="700"
+                    fill="${this.skipConnectionEnabled ? "var(--teal)" : "var(--rose)"}">
+                    ${this.skipConnectionEnabled ? "Residual Skip: 100% Intact" : "Residual Cut: Signal Fades"}
+                  </text>
+
+                  <path d="M 126 108 L 464 108" fill="none" stroke="var(--accent-primary)" stroke-width="3"/>
+                  <circle r="4.5" fill="var(--accent-primary)">
+                    <animateMotion dur="1.9s" repeatCount="indefinite" path="M 126 108 L 464 108"/>
+                  </circle>
+                  <line x1="504" y1="108" x2="534" y2="108" stroke="${this.skipConnectionEnabled ? "var(--teal)" : "var(--rose)"}" stroke-width="3"/>
+
+                  <rect x="16" y="82" width="110" height="52" rx="10" fill="var(--bg-surface)" stroke="var(--accent-primary)" stroke-width="2"/>
+                  <text x="71" y="104" text-anchor="middle" font-size="11" fill="var(--ink-muted)">Input x</text>
+                  <text x="71" y="122" text-anchor="middle" font-size="13" font-weight="700" font-family="JetBrains Mono" fill="var(--ink-primary)">"${this.esc(activeTok.text.slice(0, 9))}"</text>
+
+                  <rect x="218" y="80" width="164" height="56" rx="10" fill="var(--bg-surface)" stroke="var(--border-strong)" stroke-width="2"/>
+                  <text x="300" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink-primary)">Sublayer(x)</text>
+                  <text x="300" y="122" text-anchor="middle" font-size="11" fill="var(--ink-muted)">Attention / FFN</text>
+
+                  <circle cx="484" cy="108" r="20" fill="${this.skipConnectionEnabled ? "var(--teal-soft)" : "var(--rose-soft)"}" stroke="${this.skipConnectionEnabled ? "var(--teal)" : "var(--rose)"}" stroke-width="2.5"/>
+                  <text x="484" y="114" text-anchor="middle" font-size="19" font-weight="700" fill="${this.skipConnectionEnabled ? "var(--teal)" : "var(--rose)"}">${this.skipConnectionEnabled ? "+" : "!"}</text>
+
+                  <rect x="534" y="82" width="74" height="52" rx="10" fill="var(--bg-surface)" stroke="${this.skipConnectionEnabled ? "var(--teal)" : "var(--rose)"}" stroke-width="2" opacity="${this.skipConnectionEnabled ? "1" : "0.55"}"/>
+                  <text x="571" y="104" text-anchor="middle" font-size="11" fill="var(--ink-muted)">Out</text>
+                  <text x="571" y="122" text-anchor="middle" font-size="13" font-weight="700" font-family="JetBrains Mono" fill="${this.skipConnectionEnabled ? "var(--teal)" : "var(--rose)"}">${this.skipConnectionEnabled ? "100%" : "28%"}</text>
+                </svg>
               </div>
+              <div id="skipStatusText" class="signal-health-bar"></div>
             </div>
           ` : `
             <div class="inset-panel">
               <div class="stage-toolbar-row" style="margin-bottom:12px;">
-                <div>
-                  <div class="section-label">Giant Fact Cabinet (Feed-Forward Memory)</div>
-                  <div id="ffnSummaryText" style="font-size:12.5px; color:var(--ink-secondary); margin-top:2px;"></div>
-                </div>
-                <div class="segmented-group" role="group" aria-label="Fact cabinet design">
-                  <button type="button" class="seg-btn ${this.ffnArch === "swiglu" ? "is-active" : ""}" onclick="pipelineStages.setFFNArch('swiglu')">SwiGLU (Smart Gate)</button>
-                  <button type="button" class="seg-btn ${this.ffnArch === "gelu" ? "is-active" : ""}" onclick="pipelineStages.setFFNArch('gelu')">Classic GELU</button>
+                <div class="section-label">Feed-Forward Neurons (FFN) &middot; <span class="mono">"${this.esc(activeTok.text)}"</span></div>
+                <div class="segmented-group" role="group" aria-label="FFN activation architecture">
+                  <button type="button" class="seg-btn ${this.ffnArch === "swiglu" ? "is-active" : ""}" onclick="pipelineStages.setFFNArch('swiglu')">SwiGLU</button>
+                  <button type="button" class="seg-btn ${this.ffnArch === "gelu" ? "is-active" : ""}" onclick="pipelineStages.setFFNArch('gelu')">GELU</button>
                 </div>
               </div>
-              <div style="font-size:12px; color:var(--ink-muted); margin-bottom:8px;">Tall teal bars are the exact memory lightbulbs switching ON when the AI sees <strong>"${this.esc(activeTok.text)}"</strong>:</div>
-              <div id="ffnNeuronsChart" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(42px, 1fr)); gap:6px; align-items:end; height:88px; padding-top:8px;"></div>
+              <div id="ffnNeuronsChart" class="bulb-grid"></div>
+              <div id="ffnBulbDetail" class="bulb-detail-bar"></div>
             </div>
           `}
         </div>
 
         <details class="stage-deep-dive">
           <summary class="deep-dive-summary">
-            <span>Want the Nerdy AI Math? (RMSNorm, Residuals &amp; SwiGLU FFN)</span>
+            <span>Math Formula &middot; RMSNorm / Residual / SwiGLU</span>
             <span class="mono">+</span>
           </summary>
           <div class="deep-dive-content">
-            <p>RMSNorm keeps every vector's average energy near 1.0, Residual Skip Connections add x back in so gradients flow cleanly through dozens of layers, and SwiGLU acts like a gated lookup table storing factual knowledge.</p>
             <pre class="formula-block">RMSNorm(x) = (x / &radic;(mean(x&sup2;) + &epsilon;)) &times; &gamma;
 Residual:    h = x + Sublayer(RMSNorm(x))
 SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down</pre>
@@ -1249,26 +1381,56 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
 
   setStage5Tab(tab) {
     this.stage5Tab = tab;
+    this.app.markStageExplored(5);
     this.app.renderStageById(5);
+  }
+
+  selectSpikeBar(idx) {
+    this.spikeBarIndex = Math.max(0, Math.min(7, parseInt(idx, 10) || 0));
+    this.app.markStageExplored(5);
+    const tag = document.getElementById("spikeBarTag");
+    if (tag) tag.textContent = `d${this.spikeBarIndex}`;
+    this.updateStage5Visuals();
   }
 
   setNormSpike(val) {
     this.normSpikeValue = parseFloat(val) || 0;
+    this.app.markStageExplored(5);
+    const slider = document.getElementById("normSpikeSlider");
+    if (slider) slider.value = String(this.normSpikeValue);
+    this.updateStage5Visuals();
+  }
+
+  blastRandomSpike() {
+    const choices = [4.5, -4.5, 5.0, -3.5, 3.5, 0.0];
+    const next = choices.find(v => Math.abs(v - this.normSpikeValue) > 1.2) || 4.5;
+    this.spikeBarIndex = (this.spikeBarIndex + 1) % 8;
+    const tag = document.getElementById("spikeBarTag");
+    if (tag) tag.textContent = `d${this.spikeBarIndex}`;
+    this.setNormSpike(next);
+  }
+
+  selectMemoryBulb(idx) {
+    this.selectedBulbIndex = idx;
+    this.app.markStageExplored(5);
     this.updateStage5Visuals();
   }
 
   setNormType(type) {
     this.normType = type;
+    this.app.markStageExplored(5);
     this.app.renderStageById(5);
   }
 
   toggleSkip() {
     this.skipConnectionEnabled = !this.skipConnectionEnabled;
+    this.app.markStageExplored(5);
     this.app.renderStageById(5);
   }
 
   setFFNArch(arch) {
     this.ffnArch = arch;
+    this.app.markStageExplored(5);
     this.app.renderStageById(5);
   }
 
@@ -1278,7 +1440,8 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
     const selectedIdx = Math.min(this.selectedTokenIndex, Math.max(0, tokens.length - 1));
     const tok = tokens[selectedIdx] || tokens[0];
     const rawVector = this.math.getTokenEmbedding(tok, hp.d_model);
-    const spikedVector = rawVector.map((v, i) => (i === 2 ? v + this.normSpikeValue : v));
+    const targetIdx = Math.min(this.spikeBarIndex, rawVector.length - 1);
+    const spikedVector = rawVector.map((v, i) => (i === targetIdx ? v + this.normSpikeValue : v));
 
     const normResult = this.normType === "rmsnorm"
       ? MathEngine.rmsNorm(spikedVector)
@@ -1292,38 +1455,50 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
     }
     const rmsReadout = document.getElementById("normRmsReadout");
     if (rmsReadout) {
-      rmsReadout.textContent = `Volume before: ${beforeNormStats.rms.toFixed(2)} → after: ${afterNormCheck.rms.toFixed(2)}`;
+      rmsReadout.textContent = `RMS ${beforeNormStats.rms.toFixed(2)} → ${afterNormCheck.rms.toFixed(2)}`;
     }
 
-    const renderBars = (elId, vec, maxScale, highlightColor) => {
+    const renderEqualizer = (elId, vec, maxScale, isBefore) => {
       const el = document.getElementById(elId);
       if (!el) return;
-      el.innerHTML = vec.map((val, i) => {
-        const pct = Math.min(48, (Math.abs(val) / maxScale) * 48);
-        const left = val >= 0 ? 50 : 50 - pct;
-        const color = i === 2 && Math.abs(this.normSpikeValue) >= 1.5 ? highlightColor : "var(--accent-primary)";
-        return `
-          <div class="dna-row">
-            <span style="color:var(--ink-muted);">d${i}</span>
-            <div class="dna-track">
-              <div class="dna-zero"></div>
-              <div class="dna-bar" style="left:${left.toFixed(1)}%; width:${pct.toFixed(1)}%; background:${color};"></div>
-            </div>
-            <span class="tabular-nums" style="text-align:right;">${val >= 0 ? "+" : ""}${val.toFixed(2)}</span>
-          </div>
-        `;
-      }).join("");
+      const limitPct = Math.min(82, Math.round((2.0 / maxScale) * 100));
+      el.innerHTML = `
+        <div class="eq-limit-line" style="bottom:${limitPct}%;">
+          <span>Limit</span>
+        </div>
+        <div class="eq-columns">
+          ${vec.map((val, i) => {
+            const hPct = Math.max(8, Math.min(100, Math.round((Math.abs(val) / maxScale) * 100)));
+            const isSpiked = Math.abs(val) > 2.0;
+            const isTarget = i === targetIdx;
+            const barColor = isSpiked && isBefore ? "var(--rose)" : isBefore ? "var(--accent-primary)" : "var(--teal)";
+            return `
+              <button type="button" class="eq-col is-clickable ${isTarget ? "is-target" : ""}" onclick="pipelineStages.selectSpikeBar(${i})" title="Spike d${i}: ${val.toFixed(2)}">
+                <span class="eq-bar-slot">
+                  <span class="eq-bar-fill" style="height:${hPct}%; background:${barColor};"></span>
+                </span>
+                <span class="mono eq-bar-val tabular-nums">${val.toFixed(1)}</span>
+                <span class="mono eq-bar-idx">d${i}</span>
+              </button>
+            `;
+          }).join("")}
+        </div>
+      `;
     };
 
-    const sharedScale = Math.max(2.0, ...spikedVector.map(Math.abs), ...normResult.output.map(Math.abs));
-    renderBars("normBeforeChart", spikedVector, sharedScale, "var(--rose)");
-    renderBars("normAfterChart", normResult.output, sharedScale, "var(--teal)");
+    const sharedScale = Math.max(2.6, ...spikedVector.map(Math.abs), ...normResult.output.map(Math.abs));
+    renderEqualizer("normBeforeChart", spikedVector, sharedScale, true);
+    renderEqualizer("normAfterChart", normResult.output, sharedScale, false);
 
     const skipEl = document.getElementById("skipStatusText");
     if (skipEl) {
-      skipEl.textContent = this.skipConnectionEnabled
-        ? "Photocopy shortcut is ON: the original word rides straight through while new clues are added on top!"
-        : "Photocopy shortcut is OFF: after passing through lots of floors, the AI starts forgetting what the original word even was.";
+      const pct = this.skipConnectionEnabled ? 100 : 28;
+      skipEl.innerHTML = `
+        <span class="mono tabular-nums signal-health-label ${this.skipConnectionEnabled ? "is-safe" : "is-danger"}">Signal ${pct}%</span>
+        <span class="signal-health-track">
+          <span class="signal-health-fill ${this.skipConnectionEnabled ? "is-safe" : "is-danger"}" style="width:${pct}%;"></span>
+        </span>
+      `;
     }
 
     const ffnInput = this.skipConnectionEnabled
@@ -1335,103 +1510,111 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
       architecture: this.ffnArch
     });
 
-    const ffnSummary = document.getElementById("ffnSummaryText");
-    if (ffnSummary) {
-      ffnSummary.textContent = `Opens "${tok.text}" from ${hp.d_model} numbers into ${ffnResult.d_ff} fact lightbulbs (${ffnResult.architecture}), grabs useful memories, and packs it back to ${hp.d_model}.`;
-    }
-
-    const neurons = (ffnResult.hidden || ffnResult.hiddenActivated || []).slice(0, 14);
+    const neurons = (ffnResult.hidden || ffnResult.hiddenActivated || []).slice(0, 12);
     const maxN = Math.max(0.25, ...neurons.map(Math.abs));
+    const factTags = ["Animals", "Speed", "Actions", "Colors", "Places", "Grammar", "Time", "Nature", "Objects", "Stories", "Tech", "Rhythm"];
     const neuronsEl = document.getElementById("ffnNeuronsChart");
     if (neuronsEl) {
       neuronsEl.innerHTML = neurons.map((n, i) => {
-        const hPct = Math.max(12, Math.round((Math.abs(n) / maxN) * 100));
-        const active = Math.abs(n) > maxN * 0.45;
+        const intensity = Math.min(1, Math.abs(n) / maxN);
+        const pct = Math.round(intensity * 100);
+        const isLit = intensity > 0.42;
+        const isPicked = this.selectedBulbIndex === i;
         return `
-          <div style="display:flex; flex-direction:column; align-items:center; gap:3px; height:100%; justify-content:flex-end;">
-            <div style="width:100%; height:${hPct}%; background:${active ? "var(--teal)" : "var(--border-strong)"}; border-radius:4px 4px 2px 2px;" title="Memory Bulb ${i}: ${n.toFixed(3)}"></div>
-            <span class="mono" style="font-size:10px; color:var(--ink-muted);">m${i}</span>
-          </div>
+          <button type="button" class="bulb-card ${isLit ? "is-lit" : ""} ${isPicked ? "is-picked" : ""}" onclick="pipelineStages.selectMemoryBulb(${i})" title="${factTags[i]}: ${n.toFixed(3)}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z" fill="${isLit ? "currentColor" : "none"}" fill-opacity="${isLit ? "0.28" : "0"}"/>
+            </svg>
+            <span class="bulb-name">${factTags[i]}</span>
+            <span class="bulb-mini-bar" aria-hidden="true"><span style="width:${Math.max(8, pct)}%;"></span></span>
+            <span class="mono tabular-nums bulb-pct">${pct}%</span>
+          </button>
         `;
       }).join("");
+    }
+    const detailEl = document.getElementById("ffnBulbDetail");
+    if (detailEl) {
+      if (this.selectedBulbIndex >= 0 && this.selectedBulbIndex < neurons.length) {
+        const val = neurons[this.selectedBulbIndex];
+        const pct = Math.round(Math.min(1, Math.abs(val) / maxN) * 100);
+        detailEl.innerHTML = `<strong class="mono">${factTags[this.selectedBulbIndex]}</strong> &middot; <span class="mono tabular-nums">${pct}%</span> &middot; ${pct > 42 ? "LIT" : "QUIET"}`;
+      } else {
+        detailEl.textContent = `Tap any bulb · ${ffnResult.d_ff} neurons (${ffnResult.architecture})`;
+      }
     }
   }
 
   // ========================================================================
-  // CHAPTER 6: 12-Floor Thinking Elevator (Deep Layers & Word Scores)
+  // CHAPTER 6: 12 Thinking Floors (Visual Elevator Shaft + Live Word Race)
   // ========================================================================
   renderStage6(container) {
     container.innerHTML = `
       <div class="stage-card">
-        <div class="stage-top-header">
-          <div class="stage-kicker">Chapter 6 of 7 &middot; 12-Floor Thinking Elevator (Deep Layers)</div>
-          <h2 class="stage-title">Riding a 12-floor thinking elevator to score every word</h2>
-          <div class="stage-summary-box">
-            <strong>Imagine this:</strong> One quick thought isn't enough to understand a whole story! So the AI sends your sentence up a 12-floor elevator, running Word Detective + 3 Brain Chores on <em>every single floor</em>. Ground floors check simple spelling and grammar; top floors understand the whole idea and give every word in the dictionary a score!
+        <div class="stage-header-compact stage-header-row">
+          <div>
+            <div class="stage-kicker">06 &middot; Layer Stack &amp; Logits (12 Floors)</div>
+            <h2 class="stage-title">Refine logits across 12 layers</h2>
           </div>
-          ${this.renderHandoff(
-            "From Chapter 5",
-            "1 floor of thinking",
-            "Rides up 12 floors to sharpen the idea",
-            "Dictionary Scores",
-            "Top next-word guesses ranked"
-          )}
+          <span id="layerReadout" class="stage-live-pill mono tabular-nums">Layer ${this.selectedLayer} / 12</span>
         </div>
 
         <div class="stage-visual-container">
-          ${this.renderTryThis("Click <strong>Floor 1 (First Guess)</strong> and then <strong>Floor 12 (Top Floor)</strong> to watch the AI's favorite next word jump clearly to the top of the scoreboard!")}
-
-          <div class="inset-panel">
-            <div class="stage-toolbar-row" style="margin-bottom:10px;">
-              <label for="layerDepthSlider" class="section-label">Elevator Floor: <span id="layerReadout" class="mono tabular-nums" style="color:var(--accent-primary);">Floor ${this.selectedLayer} of 12</span></label>
-              <div class="presets-list">
-                <button type="button" class="preset-btn" onclick="pipelineStages.setSelectedLayer(1)">Floor 1 (First Guess)</button>
-                <button type="button" class="preset-btn" onclick="pipelineStages.setSelectedLayer(6)">Floor 6 (Halfway Up)</button>
-                <button type="button" class="preset-btn" onclick="pipelineStages.setSelectedLayer(12)">Floor 12 (Top Floor)</button>
-              </div>
-            </div>
-
-            <input id="layerDepthSlider" type="range" min="1" max="12" step="1" value="${this.selectedLayer}" oninput="pipelineStages.setSelectedLayer(this.value)">
-
-            <div class="layer-tower" id="layerTowerButtons" role="group" aria-label="Choose elevator floor">
-              ${Array.from({ length: 12 }, (_, idx) => {
-                const l = idx + 1;
-                return `<button type="button" class="layer-pill-btn ${l === this.selectedLayer ? "is-active" : l < this.selectedLayer ? "is-passed" : ""}" data-layer="${l}" onclick="pipelineStages.setSelectedLayer(${l})">F${l}</button>`;
-              }).join("")}
+          <div class="stage-toolbar-row">
+            <span class="section-label">Layer Elevator</span>
+            <div class="inline-controls">
+              <button type="button" class="btn btn-sm btn-primary" onclick="pipelineStages.rideElevatorAnimation()">
+                ${this._elevatorTimer ? "Stop" : "Run L1 → L12"}
+              </button>
+              <button type="button" class="preset-btn" onclick="pipelineStages.setSelectedLayer(1)">L1</button>
+              <button type="button" class="preset-btn" onclick="pipelineStages.setSelectedLayer(6)">L6</button>
+              <button type="button" class="preset-btn" onclick="pipelineStages.setSelectedLayer(12)">L12</button>
             </div>
           </div>
 
-          <div class="live-insight-bar" id="layerRoleReadout"></div>
-
-          <div class="inset-panel">
-            <div class="stage-toolbar-row" style="margin-bottom:10px;">
-              <span class="section-label">Top 8 Dictionary Word Scores on This Floor</span>
-              <span style="font-size:12px; color:var(--ink-muted);">Higher score = AI likes this next word more</span>
+          <div class="elevator-stage-grid">
+            <!-- Left: Visual 12-Story Building Elevator with Sliding Car Rail -->
+            <div class="inset-panel elevator-building">
+              <div class="elevator-roof">Output Logits</div>
+              <div class="elevator-body-row">
+                <div class="elevator-rail" aria-hidden="true">
+                  <div id="elevatorCarMarker" class="elevator-car-marker" style="top:${Math.round(((12 - this.selectedLayer) / 11) * 90)}%;"></div>
+                </div>
+                <div class="elevator-shaft" id="layerTowerButtons" role="group" aria-label="Choose transformer layer">
+                  ${Array.from({ length: 12 }, (_, idx) => {
+                    const l = 12 - idx;
+                    const zone = l >= 9 ? "Semantics" : l >= 5 ? "Context" : "Syntax";
+                    return `
+                      <button type="button" class="elevator-floor-btn ${l === this.selectedLayer ? "is-active" : l < this.selectedLayer ? "is-passed" : ""}" data-layer="${l}" onclick="pipelineStages.setSelectedLayer(${l})">
+                        <span class="mono floor-num">L${l}</span>
+                        <span class="floor-zone">${zone}</span>
+                        <span class="elevator-car-indicator" aria-hidden="true">${l === this.selectedLayer ? "●" : ""}</span>
+                      </button>
+                    `;
+                  }).join("")}
+                </div>
+              </div>
+              <input id="layerDepthSlider" type="range" min="1" max="12" step="1" value="${this.selectedLayer}" oninput="pipelineStages.setSelectedLayer(this.value)" aria-label="Transformer layer slider" style="margin-top:10px;">
             </div>
-            <table class="logits-preview-table">
-              <thead>
-                <tr>
-                  <th>Rank</th>
-                  <th>Next Word Guess</th>
-                  <th>Neighborhood</th>
-                  <th>How Confident</th>
-                  <th style="text-align:right;">Raw Score</th>
-                </tr>
-              </thead>
-              <tbody id="logitsLeaderboardBody"></tbody>
-            </table>
+
+            <!-- Right: Visual Next-Word Race -->
+            <div class="inset-panel race-panel">
+              <div class="race-header-row">
+                <span class="section-label">Top 6 Logits</span>
+                <span id="layerZoneBadge" class="race-zone-tag"></span>
+              </div>
+              <div id="layerRoleReadout" class="clarity-meter-box"></div>
+              <div id="logitsLeaderboardBody" class="race-lanes"></div>
+            </div>
           </div>
         </div>
 
         <details class="stage-deep-dive">
           <summary class="deep-dive-summary">
-            <span>Want the Nerdy AI Math? (Stacked Layers &amp; Unembedding Logits)</span>
+            <span>Math Formula &middot; Stacked Layers &amp; Logits</span>
             <span class="mono">+</span>
           </summary>
           <div class="deep-dive-content">
-            <p>Each floor repeats the Transformer block. At the top floor L, the final hidden vector is multiplied by the Unembedding Matrix W<sub>U</sub> to compute one raw score (called a <strong>logit</strong>) for every word in the entire dictionary.</p>
-            <pre class="formula-block">h^(l) = Floor_l(h^(l-1))
-logits z = RMSNorm(h^(L)) &middot; W_U   (1 score for every word in |V|)</pre>
+            <pre class="formula-block">h^(l) = Floor_l(h^(l-1))   &middot;   logits z = RMSNorm(h^(L)) &middot; W_U</pre>
           </div>
         </details>
       </div>
@@ -1442,9 +1625,32 @@ logits z = RMSNorm(h^(L)) &middot; W_U   (1 score for every word in |V|)</pre>
 
   setSelectedLayer(l) {
     this.selectedLayer = parseInt(l, 10) || 1;
+    this.app.markStageExplored(6);
     const slider = document.getElementById("layerDepthSlider");
     if (slider) slider.value = String(this.selectedLayer);
     this.updateStage6Visuals();
+  }
+
+  rideElevatorAnimation() {
+    this.app.markStageExplored(6);
+    if (this._elevatorTimer) {
+      clearInterval(this._elevatorTimer);
+      this._elevatorTimer = null;
+      this.app.renderStageById(6);
+      return;
+    }
+    this.selectedLayer = 1;
+    this.app.renderStageById(6);
+    this._elevatorTimer = setInterval(() => {
+      if (this.selectedLayer >= 12) {
+        clearInterval(this._elevatorTimer);
+        this._elevatorTimer = null;
+        this.app.renderStageById(6);
+        return;
+      }
+      this.selectedLayer += 1;
+      this.setSelectedLayer(this.selectedLayer);
+    }, 320);
   }
 
   updateStage6Visuals() {
@@ -1453,7 +1659,12 @@ logits z = RMSNorm(h^(L)) &middot; W_U   (1 score for every word in |V|)</pre>
     const layer = this.selectedLayer;
 
     const readout = document.getElementById("layerReadout");
-    if (readout) readout.textContent = `Floor ${layer} of 12`;
+    if (readout) readout.textContent = `Layer ${layer} / 12`;
+
+    const carMarker = document.getElementById("elevatorCarMarker");
+    if (carMarker) {
+      carMarker.style.top = `${Math.round(((12 - layer) / 11) * 90)}%`;
+    }
 
     const tower = document.getElementById("layerTowerButtons");
     if (tower) {
@@ -1461,48 +1672,60 @@ logits z = RMSNorm(h^(L)) &middot; W_U   (1 score for every word in |V|)</pre>
         const l = parseInt(btn.getAttribute("data-layer"), 10);
         btn.classList.toggle("is-active", l === layer);
         btn.classList.toggle("is-passed", l < layer);
+        const ind = btn.querySelector(".elevator-car-indicator");
+        if (ind) ind.textContent = l === layer ? "●" : "";
       });
     }
 
-    const sortedLogits = this.math.computeLayerSortedLogits(tokens, layer, VOCABULARY_LIST, hp.d_model).slice(0, 8);
+    const sortedLogits = this.math.computeLayerSortedLogits(tokens, layer, VOCABULARY_LIST, hp.d_model).slice(0, 6);
     const topWord = sortedLogits[0];
+    const zoneBadge = document.getElementById("layerZoneBadge");
+    if (zoneBadge) {
+      zoneBadge.textContent = layer <= 4 ? "Fuzzy" : layer <= 8 ? "Focusing" : "Sharp";
+    }
+
+    const clarityPct = Math.round((layer / 12) * 100);
     const roleReadout = document.getElementById("layerRoleReadout");
     if (roleReadout) {
-      const stageDesc = layer <= 3
-        ? "<strong>Ground Floors (1–3):</strong> Just getting started—checking basic grammar, so lots of guesses are still tied together."
-        : layer <= 8
-          ? "<strong>Middle Floors (4–8):</strong> Putting the story clues together so words that fit the topic climb higher!"
-          : "<strong>Top Floors (9–12):</strong> Crystal clear! The AI separates its favorite next words way ahead of bad guesses.";
-      roleReadout.innerHTML = `${stageDesc}${topWord ? ` #1 favorite right now: <strong>"${this.esc(topWord.token)}"</strong> (score ${topWord.rawLogit.toFixed(2)}).` : ""}`;
+      roleReadout.innerHTML = `
+        <div class="clarity-meta">
+          <span class="mono">Leader: <strong>"${this.esc(topWord?.token || "")}"</strong></span>
+          <span class="mono tabular-nums" style="color:var(--teal);">${clarityPct}% clarity</span>
+        </div>
+        <div class="clarity-track" aria-hidden="true">
+          <div class="clarity-fill" style="width:${clarityPct}%;"></div>
+        </div>
+      `;
     }
 
     const maxLogit = Math.max(1, ...sortedLogits.map(c => c.rawLogit));
     const minLogit = Math.min(0, ...sortedLogits.map(c => c.rawLogit));
     const span = Math.max(0.5, maxLogit - minLogit);
 
-    const tbody = document.getElementById("logitsLeaderboardBody");
-    if (tbody) {
-      tbody.innerHTML = sortedLogits.map((c, idx) => {
-        const barPct = Math.max(8, Math.round(((c.rawLogit - minLogit) / span) * 100));
+    const body = document.getElementById("logitsLeaderboardBody");
+    if (body) {
+      body.innerHTML = sortedLogits.map((c, idx) => {
+        const barPct = Math.max(10, Math.round(((c.rawLogit - minLogit) / span) * 100));
+        const encodedWord = encodeURIComponent(c.token);
         return `
-          <tr>
-            <td class="mono tabular-nums" style="color:var(--ink-muted);">#${idx + 1}</td>
-            <td class="mono" style="font-weight:600; color:var(--ink-primary);">"${this.esc(c.token)}"</td>
-            <td style="font-size:12px; color:var(--ink-secondary);">${this.esc(c.cluster)}</td>
-            <td style="width:32%;">
-              <div class="attn-progress-bar">
-                <div class="attn-progress-fill" style="width:${barPct}%; background:${idx === 0 ? "var(--teal)" : "var(--accent-primary)"};"></div>
-              </div>
-            </td>
-            <td class="mono tabular-nums" style="text-align:right; font-weight:600;">${c.rawLogit.toFixed(2)}</td>
-          </tr>
+          <button type="button" class="race-lane is-clickable ${idx === 0 ? "is-leader" : ""}" onclick="app.appendCustomWord(decodeURIComponent('${encodedWord}'))" title="Add '${this.esc(c.token)}' to prompt">
+            <span class="race-lane-meta">
+              <span class="mono tabular-nums race-rank">#${idx + 1}</span>
+              <span class="mono race-word">"${this.esc(c.token)}"</span>
+              <span class="race-cluster">${this.esc(c.cluster)}</span>
+              <span class="mono tabular-nums race-score">${c.rawLogit.toFixed(2)}</span>
+            </span>
+            <span class="race-track">
+              <span class="race-bar" style="display:block; width:${barPct}%; background:${idx === 0 ? "var(--teal)" : "var(--accent-primary)"};"></span>
+            </span>
+          </button>
         `;
       }).join("");
     }
   }
 
   // ========================================================================
-  // CHAPTER 7: Spin the Word Wheel (Temperature, Top-K & Top-P)
+  // CHAPTER 7: Real Interactive SVG Prize Wheel + Word Picker
   // ========================================================================
   renderStage7(container) {
     const hp = this.app.hyperparams;
@@ -1510,50 +1733,64 @@ logits z = RMSNorm(h^(L)) &middot; W_U   (1 score for every word in |V|)</pre>
 
     container.innerHTML = `
       <div class="stage-card">
-        <div class="stage-top-header">
-          <div class="stage-kicker">Chapter 7 of 7 &middot; Pick the Next Word (Sampling)</div>
-          <h2 class="stage-title">Spinning the weighted prize wheel to pick the next word!</h2>
-          <div class="stage-summary-box">
-            <strong>Imagine this:</strong> At the top floor, the AI turns those word scores into slice sizes on a prize wheel that adds up to 100%. Turn the <strong>Wildness (Temperature)</strong> dial low for safe guesses or high for silly surprises, cross out weak choices, and spin! Then the new word joins your sentence and the entire 7-chapter journey starts all over again!
+        <div class="stage-header-compact stage-header-row">
+          <div>
+            <div class="stage-kicker">07 &middot; Softmax &amp; Sampling (Prize Wheel)</div>
+            <h2 class="stage-title">Spin probabilities for next token</h2>
           </div>
-          ${this.renderHandoff(
-            "From Chapter 6",
-            "Top-floor word scores",
-            "Turns scores into % slices & spins the wheel",
-            "Next Word!",
-            "Added to your sentence"
-          )}
+          ${lastMeta ? `
+            <span id="stage7LastPickedBanner" class="stage-live-pill is-teal mono">
+              + "${this.esc(lastMeta.word)}"${lastMeta.probPct ? ` · ${lastMeta.probPct}%` : ""}
+            </span>
+          ` : `<span class="stage-live-pill mono">Softmax Wheel</span>`}
         </div>
 
         <div class="stage-visual-container">
-          ${this.renderTryThis("Try clicking <strong>Play It Safe</strong> vs <strong>Super Silly</strong> to watch the bars grow and shrink, then click <strong>Roll &amp; Add Next Word</strong> (or click any word bar yourself) to keep writing your story!")}
-
-          <!-- Live Fill-in-the-blank Sentence Preview -->
+          <!-- Live Fill-in-the-blank Sentence -->
           <div class="sentence-preview-box" id="stage7SentencePreview"></div>
 
-          ${lastMeta ? `
-            <div class="live-insight-bar" id="stage7LastPickedBanner">
-              <strong>Boom! Added "${this.esc(lastMeta.word)}" to your sentence!</strong>
-              ${lastMeta.manual
-                ? "You picked that word yourself! Scroll up anytime—every single chapter above already updated with your new word."
-                : `The prize wheel landed on it from ${lastMeta.survivors} choices (${lastMeta.probPct}% slice at Wildness ${lastMeta.temperature.toFixed(2)}). Every chapter above just updated!`}
+          <!-- Two-Column Wheel + Clickable Slices -->
+          <div class="wheel-stage-split">
+            <div class="inset-panel wheel-panel">
+              <div class="wheel-visual-stage">
+                <div class="wheel-pointer" aria-hidden="true"></div>
+                <svg id="prizeWheelSvg" class="prize-wheel-svg" viewBox="0 0 280 280" role="img" aria-label="Interactive Softmax probability prize wheel"></svg>
+                <button type="button" class="wheel-spin-hub" onclick="pipelineStages.spinWheelAndAppend()" aria-label="Spin prize wheel">SPIN</button>
+              </div>
+              <div class="wheel-cta-row">
+                <button type="button" id="rollSampleBtn" class="btn btn-primary" onclick="pipelineStages.spinWheelAndAppend()">
+                  ${this.isWheelSpinning ? "Spinning..." : "Sample Token"}
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="app.toggleAutoPlay()">
+                  ${this.app.isAutoPlaying ? "Pause" : "Auto-Write"}
+                </button>
+              </div>
             </div>
-          ` : ""}
 
+            <div class="inset-panel wheel-slices-panel">
+              <div class="stage-toolbar-row" style="margin-bottom:10px;">
+                <span class="section-label">Softmax Probabilities (tap to add)</span>
+                <span id="activeSurvivorCount" class="mono tabular-nums" style="font-size:12px; color:var(--teal); font-weight:600;"></span>
+              </div>
+              <div id="candBarsContainer" class="cand-bars-container"></div>
+            </div>
+          </div>
+
+          <!-- Sampling Controls -->
           <div class="inset-panel">
-            <div class="stage-toolbar-row" style="margin-bottom:14px;">
-              <span class="section-label">Prize Wheel Dials (How adventurous should the AI be?)</span>
+            <div class="stage-toolbar-row" style="margin-bottom:12px;">
+              <span class="section-label">Sampling Controls</span>
               <div class="presets-list">
-                <button type="button" class="preset-btn" onclick="pipelineStages.applySamplingPreset(0.15, 3, 0.7)">Play It Safe</button>
-                <button type="button" class="preset-btn" onclick="pipelineStages.applySamplingPreset(0.8, 10, 0.9)">Just Right</button>
-                <button type="button" class="preset-btn" onclick="pipelineStages.applySamplingPreset(1.35, 18, 0.98)">Super Silly</button>
+                <button type="button" class="preset-btn" onclick="pipelineStages.applySamplingPreset(0.15, 3, 0.7)">Safe</button>
+                <button type="button" class="preset-btn" onclick="pipelineStages.applySamplingPreset(0.8, 10, 0.9)">Balanced</button>
+                <button type="button" class="preset-btn" onclick="pipelineStages.applySamplingPreset(1.35, 18, 0.98)">Wild</button>
               </div>
             </div>
 
             <div class="sampling-sliders-grid">
               <div class="slider-block">
                 <div class="slider-head">
-                  <label for="tempSlider">Wildness (Temperature)</label>
+                  <label for="tempSlider">Temperature</label>
                   <span id="tempReadout" class="mono tabular-nums">${hp.temperature.toFixed(2)}</span>
                 </div>
                 <input id="tempSlider" type="range" min="0.00" max="1.50" step="0.05" value="${hp.temperature}" oninput="pipelineStages.updateSamplingSlider('temperature', this.value)">
@@ -1562,58 +1799,38 @@ logits z = RMSNorm(h^(L)) &middot; W_U   (1 score for every word in |V|)</pre>
 
               <div class="slider-block">
                 <div class="slider-head">
-                  <label for="topKSlider">Top-K Shortlist</label>
-                  <span id="topKReadout" class="mono tabular-nums">${hp.top_k} words</span>
+                  <label for="topKSlider">Top-K</label>
+                  <span id="topKReadout" class="mono tabular-nums">${hp.top_k}</span>
                 </div>
                 <input id="topKSlider" type="range" min="1" max="20" step="1" value="${hp.top_k}" oninput="pipelineStages.updateSamplingSlider('top_k', this.value)">
-                <div class="slider-hint">Only lets the top K favorite words onto the wheel</div>
+                <div class="slider-hint">Keep top K tokens</div>
               </div>
 
               <div class="slider-block">
                 <div class="slider-head">
-                  <label for="topPSlider">Top-P Cutoff</label>
+                  <label for="topPSlider">Top-P (Nucleus)</label>
                   <span id="topPReadout" class="mono tabular-nums">${Math.round(hp.top_p * 100)}%</span>
                 </div>
                 <input id="topPSlider" type="range" min="0.10" max="1.00" step="0.05" value="${hp.top_p}" oninput="pipelineStages.updateSamplingSlider('top_p', this.value)">
-                <div class="slider-hint">Crosses out tiny leftover slices past this %</div>
+                <div class="slider-hint">Trim low-prob tail</div>
               </div>
             </div>
           </div>
 
-          <div class="inset-panel">
-            <div class="stage-toolbar-row" style="margin-bottom:10px;">
-              <span class="section-label">Words on the Prize Wheel (click any active word to add it!)</span>
-              <span id="activeSurvivorCount" class="mono tabular-nums" style="font-size:12px; color:var(--teal); font-weight:600;"></span>
-            </div>
-            <div id="candBarsContainer" class="cand-bars-container"></div>
-          </div>
-
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <button type="button" id="rollSampleBtn" class="btn btn-primary" onclick="app.sampleAndAppendToken()">
-              Roll &amp; Add Next Word
-            </button>
-            <button type="button" class="btn btn-secondary" onclick="app.toggleAutoPlay()">
-              ${this.app.isAutoPlaying ? "Pause Auto-Write" : "Auto-Write Story"}
-            </button>
-            <button type="button" class="btn btn-ghost" onclick="app.resetPrompt()">
-              Reset Sentence
-            </button>
-            <a href="#top" class="btn btn-ghost" style="margin-left:auto; text-decoration:none;">
-              Back to Top &uarr;
-            </a>
+          <div class="stage-bottom-links">
+            <button type="button" class="btn btn-ghost" onclick="app.resetPrompt()">Reset</button>
+            <a href="#top" class="btn btn-ghost" style="text-decoration:none;">Top &uarr;</a>
           </div>
         </div>
 
         <details class="stage-deep-dive">
           <summary class="deep-dive-summary">
-            <span>Want the Nerdy AI Math? (Softmax Temperature, Top-K &amp; Top-P)</span>
+            <span>Math Formula &middot; Softmax / Top-K / Top-P</span>
             <span class="mono">+</span>
           </summary>
           <div class="deep-dive-content">
-            <p>Raw scores z<sub>i</sub> are divided by Temperature T before Softmax converts them into wheel percentages. Low T gives almost the whole wheel to the #1 word; high T gives surprise words bigger slices!</p>
             <pre class="formula-block">P(w_i) = exp(z_i / T) / &sum;_j exp(z_j / T)
-Top-K: Keep only the top K words, set the rest to 0%
-Top-P: Keep the smallest top group totaling &ge; P, then rescale to 100%</pre>
+Top-K keeps top K &middot; Top-P keeps smallest set &ge; P</pre>
           </div>
         </details>
       </div>
@@ -1634,6 +1851,119 @@ Top-P: Keep the smallest top group totaling &ge; P, then rescale to 100%</pre>
     this.updateStage7Visuals();
   }
 
+  spinWheelAndAppend() {
+    if (this.isWheelSpinning) return;
+    const hp = this.app.hyperparams;
+    const tokens = this.app.tokens;
+    const candidateLogits = this.math.computeLayerSortedLogits(
+      tokens,
+      this.selectedLayer || 12,
+      VOCABULARY_LIST,
+      hp.d_model
+    );
+    const sampleResult = this.math.sampleNextToken({
+      candidateLogits,
+      promptTokens: tokens,
+      temperature: hp.temperature,
+      topK: hp.top_k,
+      topP: hp.top_p,
+      repetitionPenalty: hp.repetition_penalty
+    });
+
+    if (!sampleResult || !sampleResult.sampledToken) return;
+
+    const winner = sampleResult.sampledToken;
+    const slices = buildPrizeWheelSlices(sampleResult.candidates || [], 7);
+    const matchSlice = slices.find(s => !s.isOther && s.token === winner.token) || slices[slices.length - 1];
+    const targetMid = matchSlice ? matchSlice.midAngle : 0;
+
+    // Spin 2 full rotations + land winner slice under top pointer (0 deg)
+    const desiredMod = (360 - targetMid + 360) % 360;
+    const currentMod = ((this.wheelRotationDeg % 360) + 360) % 360;
+    const delta = ((desiredMod - currentMod) + 360) % 360;
+    this.wheelRotationDeg += 720 + delta;
+    this.isWheelSpinning = true;
+
+    const wheelEl = document.getElementById("prizeWheelSvg");
+    const pointerEl = document.querySelector(".wheel-pointer");
+    const spinBtn = document.getElementById("rollSampleBtn");
+    if (spinBtn) spinBtn.textContent = "Spinning...";
+    if (pointerEl) pointerEl.classList.add("is-ticking");
+    if (wheelEl) {
+      wheelEl.style.transition = "transform 0.72s cubic-bezier(0.16, 1, 0.3, 1)";
+      wheelEl.style.transform = `rotate(${this.wheelRotationDeg.toFixed(1)}deg)`;
+    }
+
+    setTimeout(() => {
+      this.isWheelSpinning = false;
+      if (pointerEl) pointerEl.classList.remove("is-ticking");
+      this.app.lastSampledWord = winner.token;
+      const pct = Math.round((winner.normalizedProb || winner.rawProb || 0) * 100);
+      this.app.lastSampledMeta = {
+        word: winner.token,
+        probPct: pct,
+        survivors: sampleResult.activeCount,
+        temperature: hp.temperature,
+        manual: false
+      };
+      this.app.appendCustomWord(winner.token, true);
+    }, 760);
+  }
+
+  renderPrizeWheelSvg(candidates) {
+    const svg = document.getElementById("prizeWheelSvg");
+    if (!svg) return;
+
+    const slices = buildPrizeWheelSlices(candidates, 7);
+    const cx = 140;
+    const cy = 140;
+    const r = 126;
+
+    const polarToXY = (deg, rad) => {
+      const a = ((deg - 90) * Math.PI) / 180;
+      return {
+        x: cx + rad * Math.cos(a),
+        y: cy + rad * Math.sin(a)
+      };
+    };
+
+    const parts = [];
+    slices.forEach(slice => {
+      const sweep = slice.endAngle - slice.startAngle;
+      if (sweep >= 359.5) {
+        parts.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${slice.color}" stroke="var(--bg-surface)" stroke-width="2"/>`);
+      } else {
+        const p1 = polarToXY(slice.startAngle, r);
+        const p2 = polarToXY(slice.endAngle, r);
+        const largeArc = sweep > 180 ? 1 : 0;
+        const d = `M ${cx} ${cy} L ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A ${r} ${r} 0 ${largeArc} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)} Z`;
+        parts.push(`<path d="${d}" fill="${slice.color}" stroke="var(--bg-surface)" stroke-width="2"/>`);
+      }
+
+      if (sweep >= 22) {
+        const labelPos = polarToXY(slice.midAngle, r * 0.60);
+        const pct = Math.round(slice.prob * 100);
+        const textAngle = slice.midAngle > 180 ? slice.midAngle + 90 : slice.midAngle - 90;
+        const shortWord = slice.token.length > 7 && !slice.isOther ? slice.token.slice(0, 6) + "…" : slice.token;
+        const labelColor = (slice.color === "#EAB308" || slice.color === "#84CC16") ? "#181816" : "#FFFFFF";
+        parts.push(`
+          <g transform="translate(${labelPos.x.toFixed(1)}, ${labelPos.y.toFixed(1)}) rotate(${textAngle.toFixed(1)})">
+            <text text-anchor="middle" dominant-baseline="central" fill="${labelColor}" font-size="${sweep > 48 ? 11.5 : 10}" font-weight="700" font-family="JetBrains Mono, monospace">
+              ${this.esc(shortWord)} ${pct}%
+            </text>
+          </g>
+        `);
+      }
+    });
+
+    // Subtle center axle backing behind the stationary HTML SPIN button
+    parts.push(`<circle cx="${cx}" cy="${cy}" r="22" fill="var(--bg-surface)" stroke="var(--border-strong)" stroke-width="2.5"/>`);
+
+    svg.innerHTML = parts.join("");
+    svg.style.transition = "none";
+    svg.style.transform = `rotate(${this.wheelRotationDeg.toFixed(1)}deg)`;
+  }
+
   updateStage7Visuals() {
     const hp = this.app.hyperparams;
     const tokens = this.app.tokens;
@@ -1643,15 +1973,15 @@ Top-P: Keep the smallest top group totaling &ge; P, then rescale to 100%</pre>
     const tempHint = document.getElementById("tempHint");
     if (tempHint) {
       tempHint.textContent = hp.temperature <= 0.05
-        ? "Robot mode: always picks #1"
+        ? "Locked #1"
         : hp.temperature < 0.45
-          ? "Safe & predictable"
+          ? "Safe"
           : hp.temperature > 1.0
-            ? "Silly & full of surprises!"
-            : "Fun & balanced";
+            ? "Wild"
+            : "Balanced";
     }
     const topKReadout = document.getElementById("topKReadout");
-    if (topKReadout) topKReadout.textContent = `${hp.top_k} ${hp.top_k === 1 ? "word" : "words"}`;
+    if (topKReadout) topKReadout.textContent = `${hp.top_k}`;
     const topPReadout = document.getElementById("topPReadout");
     if (topPReadout) topPReadout.textContent = `${Math.round(hp.top_p * 100)}%`;
 
@@ -1671,42 +2001,53 @@ Top-P: Keep the smallest top group totaling &ge; P, then rescale to 100%</pre>
     });
     this.currentSampleResult = sampleResult;
 
+    this.renderPrizeWheelSvg(sampleResult.candidates || []);
+
     const survivorEl = document.getElementById("activeSurvivorCount");
     if (survivorEl) {
-      survivorEl.textContent = `${sampleResult.activeCount} words on the wheel`;
+      survivorEl.textContent = `${sampleResult.activeCount} active`;
     }
 
-    const candidates = (sampleResult.candidates || []).slice(0, 10);
+    const candidates = (sampleResult.candidates || []).slice(0, 8);
     const topActive = candidates.find(c => c.status === "active") || candidates[0];
     const previewEl = document.getElementById("stage7SentencePreview");
     if (previewEl) {
       const topPct = topActive ? Math.round((topActive.normalizedProb || topActive.rawProb) * 100) : 0;
       previewEl.innerHTML = `
-        <span style="font-size:12px; color:var(--ink-muted); display:block; margin-bottom:4px;">Your sentence so far + the AI's favorite next word:</span>
-        <span>${this.esc(this.app.currentPrompt)}</span>
-        <span class="sentence-preview-blank">${topActive ? `"${this.esc(topActive.token)}" (${topPct}%)` : "___"}</span>
+        <span class="preview-sentence">${this.esc(this.app.currentPrompt)}</span>
+        <span class="sentence-preview-blank">${topActive ? `"${this.esc(topActive.token)}" ${topPct}%` : "___"}</span>
       `;
     }
 
+    const sliceColors = (typeof WHEEL_SLICE_COLORS !== "undefined" && WHEEL_SLICE_COLORS) || ["#F97316", "#10B981", "#EAB308", "#0EA5E9", "#EF4444", "#84CC16", "#D97706", "#78716C"];
     const container = document.getElementById("candBarsContainer");
     if (container) {
+      let activeColorIdx = 0;
       container.innerHTML = candidates.map(c => {
         const isCut = c.status !== "active";
         const displayPct = isCut ? Math.round(c.rawProb * 100) : Math.round((c.normalizedProb || c.rawProb) * 100);
         const isWinner = !isCut && this.app.lastSampledWord && this.app.lastSampledWord === c.token;
         const encodedWord = encodeURIComponent(c.token);
+        const barColor = isCut
+          ? "var(--border-strong)"
+          : activeColorIdx < 7
+            ? sliceColors[activeColorIdx++]
+            : sliceColors[7];
         return `
           <button
             type="button"
             class="cand-bar-row ${isCut ? "cut" : ""} ${isWinner ? "is-winner" : ""}"
             ${isCut ? "disabled" : `onclick="app.appendCustomWord(decodeURIComponent('${encodedWord}'))"`}
           >
-            <span class="cand-word-label">"${this.esc(c.token)}"</span>
+            <span class="cand-word-label">
+              <span class="cand-swatch" style="background:${barColor};"></span>
+              "${this.esc(c.token)}"
+            </span>
             <span class="cand-bar-fill-track">
-              <span class="cand-bar-fill" style="display:block; width:${Math.max(2, displayPct)}%; opacity:${isCut ? 0.35 : 1};"></span>
+              <span class="cand-bar-fill" style="display:block; width:${Math.max(3, displayPct)}%; background:${barColor}; opacity:${isCut ? 0.35 : 1};"></span>
             </span>
             <span class="cand-prob-label tabular-nums">${isCut ? "0%" : `${displayPct}%`}</span>
-            ${isCut ? `<span class="cand-cut-reason">${this.esc(c.strikeReason)}</span>` : `<span style="font-size:11px; color:var(--teal); font-weight:600;">On Wheel</span>`}
+            ${isCut ? `<span class="cand-cut-reason">${this.esc(c.strikeReason)}</span>` : `<span class="cand-add-hint">+ Add</span>`}
           </button>
         `;
       }).join("");

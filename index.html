@@ -1,23 +1,40 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Transformer Lab — How AI Thinks, Step by Step</title>
-  <meta name="description" content="A fun, single-page interactive guide that explains how AI language models read sentences, map word meanings in 3D, connect clues, and guess the next word.">
+  <meta name="description" content="A visual, interactive scrolling story that shows how an AI brain turns your sentence into its next word—from LEGO word bricks and 3D maps to spinning a live prize wheel.">
   <meta property="og:title" content="Transformer Lab — How AI Thinks, Step by Step">
-  <meta property="og:description" content="Scroll through 7 interactive chapters to see how an AI brain turns your sentence into its next word.">
+  <meta property="og:description" content="Scroll through 7 visual interactive chapters to watch how an AI reads your sentence and predicts the next word.">
+
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("transformer-lab-theme");
+        var theme = saved === "light" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", theme);
+        document.documentElement.classList.toggle("dark", theme === "dark");
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "dark");
+        document.documentElement.classList.add("dark");
+      }
+    })();
+  </script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=13">
+  <link rel="stylesheet" href="css/styles.css?v=18">
 
   <!-- Local 3D Engine Scripts (Zero CDN Dependencies) -->
-  <script src="js/three.min.js?v=13"></script>
-  <script src="js/OrbitControls.js?v=13"></script>
+  <script src="js/three.min.js?v=18"></script>
+  <script src="js/OrbitControls.js?v=18"></script>
 </head>
 <body id="top">
+
+  <!-- Live Micro-Interaction Toast -->
+  <div id="microToast" class="micro-toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <!-- ============================================================== -->
   <!-- TOP NAVIGATION BAR (Strict 3-Zone Contract)                    -->
@@ -35,55 +52,82 @@
       </a>
 
       <nav class="top-nav-links" aria-label="Jump to section">
-        <a href="#stage-1" class="top-nav-link" onclick="if(window.app){ event.preventDefault(); window.app.setActiveStage(1); }">1. Word Bricks</a>
-        <a href="#stage-2" class="top-nav-link" onclick="if(window.app){ event.preventDefault(); window.app.setActiveStage(2); }">2. 3D Map</a>
-        <a href="#stage-4" class="top-nav-link" onclick="if(window.app){ event.preventDefault(); window.app.setActiveStage(4); }">4. Detective</a>
-        <a href="#stage-7" class="top-nav-link" onclick="if(window.app){ event.preventDefault(); window.app.setActiveStage(7); }">7. Next Word</a>
+        <a href="#stage-1" class="top-nav-link" onclick="if(window.app){ event.preventDefault(); window.app.setActiveStage(1); }">1. Tokenization</a>
+        <a href="#stage-2" class="top-nav-link" onclick="if(window.app){ event.preventDefault(); window.app.setActiveStage(2); }">2. Embeddings</a>
+        <a href="#stage-4" class="top-nav-link" onclick="if(window.app){ event.preventDefault(); window.app.setActiveStage(4); }">4. Self-Attention</a>
+        <a href="#stage-7" class="top-nav-link" onclick="if(window.app){ event.preventDefault(); window.app.setActiveStage(7); }">7. Sampling</a>
       </nav>
 
       <div class="top-bar-cta">
         <button type="button" class="btn btn-primary" onclick="if(window.app) window.app.sampleAndAppendToken()">
-          Predict Next Word
+          + Predict Word
         </button>
       </div>
     </div>
   </header>
 
   <!-- ============================================================== -->
-  <!-- KID-FRIENDLY HERO + LIVE SENTENCE PLAYGROUND                   -->
+  <!-- VISUAL STORY HERO + LIVE SENTENCE PLAYGROUND                   -->
   <!-- ============================================================== -->
   <section class="hero-workbench" aria-label="Interactive sentence playground">
     <div class="hero-inner">
+      <div class="hero-utility-row">
+        <span class="hero-kicker">Interactive AI Lab &middot; 7 Live Machines</span>
+        <div class="theme-switcher" role="group" aria-label="Color theme">
+          <button
+            type="button"
+            id="themeDarkBtn"
+            class="theme-btn is-active"
+            aria-pressed="true"
+            onclick="if(window.app) window.app.setTheme('dark')"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+            <span>Dark</span>
+          </button>
+          <button
+            type="button"
+            id="themeLightBtn"
+            class="theme-btn"
+            aria-pressed="false"
+            onclick="if(window.app) window.app.setTheme('light')"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+            </svg>
+            <span>Light</span>
+          </button>
+        </div>
+      </div>
+
       <div class="hero-copy-row">
-        <div class="hero-text-block">
-          <div class="hero-kicker">Interactive Visual Guide &middot; Scroll Down to Explore All 7 Steps</div>
-          <h1 class="hero-headline">How does an AI guess the next word?</h1>
-          <p class="hero-sub">
-            Type any sentence below, then simply <strong>scroll down</strong>. You will follow your own words step by step inside an AI brain—from chopping them into numbered LEGO bricks to spinning a weighted prize wheel for the next word.
-          </p>
-        </div>
-        <div class="hero-journey-preview" aria-label="7-step overview">
-          <div class="journey-mini-row">
-            <span class="journey-step-tag">1</span><span>Chop text into numbered bricks</span>
-          </div>
-          <div class="journey-mini-row">
-            <span class="journey-step-tag">2</span><span>Place each word on a 3D map</span>
-          </div>
-          <div class="journey-mini-row">
-            <span class="journey-step-tag">3–4</span><span>Track word order &amp; connect clues</span>
-          </div>
-          <div class="journey-mini-row">
-            <span class="journey-step-tag">5–7</span><span>Think 12 floors deep &amp; pick the next word</span>
+        <div class="hero-copy-block">
+          <h1 class="hero-headline">See an AI brain think&mdash;live.</h1>
+          <div class="hero-quick-tags" aria-hidden="true">
+            <span class="quick-tag"><span class="quick-dot is-orange"></span>Type</span>
+            <span class="quick-tag"><span class="quick-dot is-teal"></span>Tap</span>
+            <span class="quick-tag"><span class="quick-dot is-amber"></span>Spin</span>
           </div>
         </div>
+        <button type="button" id="heroPulseBtn" class="btn btn-primary hero-pulse-cta" onclick="if(window.app) window.app.runHeroPulseDemo()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6,4 20,12 6,20"/></svg>
+          <span>Watch It Think</span>
+        </button>
+      </div>
+
+      <!-- Live Animated Visual Story Pipeline -->
+      <div class="hero-visual-strip" id="heroVisualPipeline" aria-label="Live animated AI pipeline">
+        <!-- Populated live by app.updateHeroVisualPipeline() -->
       </div>
 
       <div class="playground-card">
         <div class="workbench-top">
           <div class="prompt-field-group">
             <div class="prompt-label-row">
-              <label for="promptInput" class="prompt-label">Your Live Sentence (changes every visual below instantly)</label>
-              <span id="tokenCountBadge" class="prompt-meta tabular-nums">7 pieces &middot; 34 letters</span>
+              <label for="promptInput" class="prompt-label">Live Prompt</label>
+              <span id="tokenCountBadge" class="prompt-meta tabular-nums">7 tokens &middot; 34 chars</span>
             </div>
             <div class="prompt-input-row">
               <input
@@ -91,10 +135,10 @@
                 id="promptInput"
                 class="prompt-input"
                 value="The quick brown fox jumps over the"
-                placeholder="Type any sentence to watch the whole page react..."
+                placeholder="Type anything..."
               >
               <button type="button" id="btnAutoPlay" class="btn btn-secondary" onclick="if(window.app) window.app.toggleAutoPlay()">
-                Auto-Play
+                Auto-Write
               </button>
               <button type="button" class="btn btn-ghost" onclick="if(window.app) window.app.resetPrompt()">
                 Reset
@@ -103,12 +147,12 @@
           </div>
 
           <div class="presets-group">
-            <span class="presets-label">Or try a fun starter sentence</span>
+            <span class="presets-label">Presets</span>
             <div class="presets-list">
-              <button type="button" class="preset-btn" onclick="if(window.app) window.app.setPrompt('The quick brown fox jumps over the')">Quick brown fox</button>
-              <button type="button" class="preset-btn" onclick="if(window.app) window.app.setPrompt('In a galaxy far far away the stars')">Galaxy far away</button>
-              <button type="button" class="preset-btn" onclick="if(window.app) window.app.setPrompt('Attention is all you need for deep learning')">Attention is all you need</button>
-              <button type="button" class="preset-btn" onclick="if(window.app) window.app.setPrompt('Large language models predict the next')">Language models predict</button>
+              <button type="button" class="preset-btn" onclick="if(window.app) window.app.setPrompt('The quick brown fox jumps over the')">Fox jumps</button>
+              <button type="button" class="preset-btn" onclick="if(window.app) window.app.setPrompt('In a galaxy far far away the stars')">Galaxy</button>
+              <button type="button" class="preset-btn" onclick="if(window.app) window.app.setPrompt('Attention is all you need for deep learning')">Attention</button>
+              <button type="button" class="preset-btn" onclick="if(window.app) window.app.setPrompt('Large language models predict the next')">LLM</button>
             </div>
           </div>
         </div>
@@ -126,11 +170,11 @@
   <!-- ============================================================== -->
   <div id="workspace" class="app-layout single-page-layout">
 
-    <!-- Left Sticky Scroll-Spy Chapter Guide -->
+    <!-- Left Sticky Monotonic Scroll-Spy Chapter Guide -->
     <aside class="stages-sidebar" aria-label="Scroll progress and chapters">
       <div class="sidebar-header-row">
-        <span class="sidebar-label">Scroll Guide</span>
-        <span id="sidebarProgressText" class="sidebar-progress tabular-nums">Chapter 1 / 7</span>
+        <span class="sidebar-label">Pipeline</span>
+        <span id="sidebarProgressText" class="sidebar-progress tabular-nums">1 / 7</span>
       </div>
       <div class="sidebar-progress-track" aria-hidden="true">
         <div id="sidebarProgressFill" class="sidebar-progress-fill" style="width:14.3%;"></div>
@@ -138,32 +182,36 @@
       <nav class="sidebar-nav" id="sidebarNav">
         <!-- Rendered dynamically by app.renderSidebar() -->
       </nav>
-      <div class="sidebar-scroll-tip">
-        Scroll down to see all 7 steps in order, or click any step to jump there.
+      <div class="sidebar-hud" id="sidebarHud">
+        <div class="sidebar-hud-row">
+          <span class="sidebar-hud-label">Explored</span>
+          <span id="sidebarExploredText" class="mono tabular-nums sidebar-hud-val">0 / 7</span>
+        </div>
+        <div class="sidebar-explored-dots" id="sidebarExploredDots" aria-hidden="true"></div>
       </div>
     </aside>
 
     <!-- Right Continuous Scrolling Story of All 7 Interactive Chapters -->
     <main class="story-stream" id="storyStream">
-      <section id="stage-1" class="chapter-section" data-stage="1" aria-label="Chapter 1: Word Bricks"></section>
-      <div class="chapter-connector" aria-hidden="true"><span>&darr; Next, turn each brick ID into a spot on a 3D map</span></div>
+      <section id="stage-1" class="chapter-section" data-stage="1" aria-label="Chapter 1: Tokenization"></section>
+      <div class="chapter-connector" id="connector-1-2" aria-hidden="true"></div>
 
-      <section id="stage-2" class="chapter-section" data-stage="2" aria-label="Chapter 2: 3D Meaning Map"></section>
-      <div class="chapter-connector" aria-hidden="true"><span>&darr; Next, stamp each word with its seat number</span></div>
+      <section id="stage-2" class="chapter-section" data-stage="2" aria-label="Chapter 2: Embeddings"></section>
+      <div class="chapter-connector" id="connector-2-3" aria-hidden="true"></div>
 
-      <section id="stage-3" class="chapter-section" data-stage="3" aria-label="Chapter 3: Word Order Clocks"></section>
-      <div class="chapter-connector" aria-hidden="true"><span>&darr; Next, let words look back and connect clues</span></div>
+      <section id="stage-3" class="chapter-section" data-stage="3" aria-label="Chapter 3: Positional Encoding (RoPE)"></section>
+      <div class="chapter-connector" id="connector-3-4" aria-hidden="true"></div>
 
-      <section id="stage-4" class="chapter-section" data-stage="4" aria-label="Chapter 4: Word Detective"></section>
-      <div class="chapter-connector" aria-hidden="true"><span>&darr; Next, keep the math balanced and check memory</span></div>
+      <section id="stage-4" class="chapter-section" data-stage="4" aria-label="Chapter 4: Self-Attention"></section>
+      <div class="chapter-connector" id="connector-4-5" aria-hidden="true"></div>
 
-      <section id="stage-5" class="chapter-section" data-stage="5" aria-label="Chapter 5: 3 Brain Chores"></section>
-      <div class="chapter-connector" aria-hidden="true"><span>&darr; Next, ride the elevator 12 thinking floors up</span></div>
+      <section id="stage-5" class="chapter-section" data-stage="5" aria-label="Chapter 5: Transformer Block"></section>
+      <div class="chapter-connector" id="connector-5-6" aria-hidden="true"></div>
 
-      <section id="stage-6" class="chapter-section" data-stage="6" aria-label="Chapter 6: 12 Thinking Floors"></section>
-      <div class="chapter-connector" aria-hidden="true"><span>&darr; Finally, spin the prize wheel to pick the next word!</span></div>
+      <section id="stage-6" class="chapter-section" data-stage="6" aria-label="Chapter 6: Layer Stack and Logits"></section>
+      <div class="chapter-connector" id="connector-6-7" aria-hidden="true"></div>
 
-      <section id="stage-7" class="chapter-section" data-stage="7" aria-label="Chapter 7: Pick the Next Word"></section>
+      <section id="stage-7" class="chapter-section" data-stage="7" aria-label="Chapter 7: Softmax and Sampling"></section>
     </main>
 
   </div>
@@ -175,20 +223,19 @@
     <div class="footer-inner">
       <details class="vram-accordion">
         <summary class="vram-summary">
-          <span class="vram-summary-title">Bonus for Curious Minds: How Big Are Real AI Brains? (Memory Calculator)</span>
-          <span class="vram-summary-hint">Compare GPT-2, Mistral-7B, LLaMA-3 8B &amp; 70B &darr;</span>
+          <span class="vram-summary-title">Real AI Sizes (Memory Calculator)</span>
+          <span class="vram-summary-hint">GPT-2 &rarr; LLaMA-3 70B &darr;</span>
         </summary>
         <div class="vram-body">
           <div class="vram-controls-row">
-            <p class="vram-desc">Real AI models use the exact same 7 steps you just scrolled through—just with way more floors and bigger word maps:</p>
             <div class="vram-select-wrap">
-              <label for="calcPresetSelect" class="vram-select-label">AI Brain</label>
+              <label for="calcPresetSelect" class="vram-select-label">Model</label>
               <select id="calcPresetSelect" class="clean-select" onchange="if(window.app) window.app.updateVRAMCalculator()">
-                <option value="custom">This Mini Sandbox</option>
-                <option value="gpt2">GPT-2 Small (768 features, 12 floors)</option>
-                <option value="mistral-7b">Mistral-7B (4096 features, 32 floors)</option>
-                <option value="llama3-8b">LLaMA-3-8B (4096 features, 32 floors)</option>
-                <option value="llama3-70b">LLaMA-3-70B (8192 features, 80 floors)</option>
+                <option value="custom">Mini Sandbox</option>
+                <option value="gpt2">GPT-2 Small</option>
+                <option value="mistral-7b">Mistral-7B</option>
+                <option value="llama3-8b">LLaMA-3-8B</option>
+                <option value="llama3-70b">LLaMA-3-70B</option>
               </select>
             </div>
           </div>
@@ -196,16 +243,17 @@
         </div>
       </details>
       <div class="footer-meta">
-        Transformer Lab &middot; A Friendly Interactive Guide to How AI Language Models Think
+        Transformer Lab &middot; Interactive Transformer Playground
       </div>
     </div>
   </footer>
 
   <!-- Scripts -->
-  <script src="js/vocabulary.js?v=13"></script>
-  <script src="js/math-engine.js?v=13"></script>
-  <script src="js/three-viewport.js?v=13"></script>
-  <script src="js/stages.js?v=13"></script>
-  <script src="js/app.js?v=13"></script>
+  <script src="js/vocabulary.js?v=18"></script>
+  <script src="js/math-engine.js?v=18"></script>
+  <script src="js/story-helpers.js?v=18"></script>
+  <script src="js/three-viewport.js?v=18"></script>
+  <script src="js/stages.js?v=18"></script>
+  <script src="js/app.js?v=18"></script>
 </body>
 </html>

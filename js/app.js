@@ -1,10 +1,11 @@
 /**
- * Application Orchestrator — Single-Page Interactive Story Edition
- * Keeps all 7 chapters rendered live on one scrolling page with scroll-spy navigation,
- * instant cross-chapter updates, and persistent 3D viewport state.
+ * Application Orchestrator — Visual Scrollytelling Edition
+ * Fixes scroll-spy flicker with strictly monotonic geometry tracking,
+ * manages dark-first dual theming, and keeps all 7 visual chapters live in sync.
  */
 
 const DEFAULT_PROMPT = "The quick brown fox jumps over the";
+const THEME_STORAGE_KEY = "transformer-lab-theme";
 
 class App {
   constructor() {
@@ -13,11 +14,21 @@ class App {
     this.currentPrompt = DEFAULT_PROMPT;
     this.tokens = [];
     this.activeStage = 1;
+    this.theme = "dark";
     this.isAutoPlaying = false;
     this.autoPlayInterval = null;
     this.lastSampledWord = null;
     this.lastSampledMeta = null;
-    this.scrollObserver = null;
+
+    // Monotonic scroll-spy state
+    this._scrollRafId = 0;
+    this._scrollLockTarget = null;
+    this._scrollLockTimer = null;
+    this._heroPulseStep = 0;
+    this._heroPulseTimers = [];
+    this.spotlightExpanded = false;
+    this.exploredStages = new Set();
+    this._toastTimer = null;
 
     this.hyperparams = {
       d_model: 8,
@@ -30,13 +41,13 @@ class App {
     };
 
     this.stageList = [
-      { id: 1, title: "Word Bricks", sub: "Chop text into IDs" },
-      { id: 2, title: "3D Meaning Map", sub: "Put words in space" },
-      { id: 3, title: "Word Order", sub: "Spin position clocks" },
-      { id: 4, title: "Word Detective", sub: "Connect sentence clues" },
-      { id: 5, title: "3 Brain Chores", sub: "Calm, copy & recall" },
-      { id: 6, title: "12 Thinking Floors", sub: "Sharpen word scores" },
-      { id: 7, title: "Pick Next Word", sub: "Spin the word wheel" }
+      { id: 1, title: "Tokenization", sub: "Word Bricks · BPE" },
+      { id: 2, title: "Embeddings", sub: "3D Vector Map" },
+      { id: 3, title: "Position (RoPE)", sub: "Seat Clocks" },
+      { id: 4, title: "Self-Attention", sub: "Clue Detective" },
+      { id: 5, title: "Transformer Block", sub: "Norm · Skip · FFN" },
+      { id: 6, title: "Layers & Logits", sub: "12 Thinking Floors" },
+      { id: 7, title: "Sampling", sub: "Softmax Wheel" }
     ];
 
     this.stagesRenderer = new PipelineStages(this);
@@ -46,13 +57,17 @@ class App {
   }
 
   init() {
+    this.initTheme();
     this.bindEvents();
     this.updateTokens();
-    // Default selected word to the last word so Stage 4 Detective arcs look rich right away
+    // Default spotlight to the last word so Detective clue strings are rich immediately
     this.stagesRenderer.selectedTokenIndex = Math.max(0, this.tokens.length - 1);
     this.renderLiveTokenBar();
     this.renderSidebar();
     this.renderAllStages();
+    this.updateHeroVisualPipeline();
+    this.updateStoryConnectors();
+    this.updateExploredHUD();
     this.updateVRAMCalculator();
     this.setupScrollSpy();
 
@@ -63,7 +78,71 @@ class App {
       this.renderStageById(1);
       this.renderStageById(4);
       this.renderStageById(5);
+      this.updateHeroVisualPipeline();
+      this.updateStoryConnectors();
     };
+  }
+
+  initTheme() {
+    let initial = "dark";
+    try {
+      const saved = localStorage.getItem(THEME_STORAGE_KEY);
+      if (saved === "light" || saved === "dark") {
+        initial = saved;
+      }
+    } catch (e) {
+      initial = "dark";
+    }
+    this.applyTheme(initial, false);
+  }
+
+  setTheme(theme) {
+    const normalized = theme === "light" ? "light" : "dark";
+    this.applyTheme(normalized, true);
+  }
+
+  toggleTheme() {
+    this.setTheme(this.theme === "dark" ? "light" : "dark");
+  }
+
+  applyTheme(theme, persist = true) {
+    this.theme = theme;
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.classList.toggle("dark", theme === "dark");
+
+    if (persist) {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, theme);
+      } catch (e) {
+        // Ignore storage restrictions
+      }
+    }
+
+    const darkBtn = document.getElementById("themeDarkBtn");
+    const lightBtn = document.getElementById("themeLightBtn");
+    if (darkBtn) {
+      darkBtn.classList.toggle("is-active", theme === "dark");
+      darkBtn.setAttribute("aria-pressed", String(theme === "dark"));
+    }
+    if (lightBtn) {
+      lightBtn.classList.toggle("is-active", theme === "light");
+      lightBtn.setAttribute("aria-pressed", String(theme === "light"));
+    }
+
+    if (window.vectorView && typeof window.vectorView.setTheme === "function") {
+      window.vectorView.setTheme(theme);
+    }
+    if (this.stagesRenderer) {
+      if (typeof this.stagesRenderer.drawStage3Canvas === "function") {
+        this.stagesRenderer.drawStage3Canvas();
+      }
+      if (typeof this.stagesRenderer.realignStage4Arcs === "function") {
+        this.stagesRenderer.realignStage4Arcs();
+      }
+      if (typeof this.stagesRenderer.updateStage2Inspector === "function") {
+        this.stagesRenderer.updateStage2Inspector();
+      }
+    }
   }
 
   bindEvents() {
@@ -82,35 +161,87 @@ class App {
       if (this.stagesRenderer && typeof this.stagesRenderer.realignStage4Arcs === "function") {
         this.stagesRenderer.realignStage4Arcs();
       }
+      this.scheduleScrollSpySync();
     });
   }
 
+  /**
+   * Strictly monotonic scroll-spy using section bounding rects and a fixed reading anchor.
+   * Prevents the IntersectionObserver bug where a leaving upper chapter momentarily
+   * steals focus back during downward scrolling.
+   */
   setupScrollSpy() {
-    if (typeof IntersectionObserver === "undefined") return;
-    if (this.scrollObserver) this.scrollObserver.disconnect();
+    const releaseLockOnManualScroll = () => {
+      if (this._scrollLockTarget !== null) {
+        this._scrollLockTarget = null;
+        if (this._scrollLockTimer) {
+          clearTimeout(this._scrollLockTimer);
+          this._scrollLockTimer = null;
+        }
+      }
+    };
 
-    const sections = document.querySelectorAll(".chapter-section[data-stage]");
+    window.addEventListener("wheel", releaseLockOnManualScroll, { passive: true });
+    window.addEventListener("touchstart", releaseLockOnManualScroll, { passive: true });
+    window.addEventListener("keydown", (e) => {
+      if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Space", "Home", "End"].includes(e.code)) {
+        releaseLockOnManualScroll();
+      }
+    }, { passive: true });
+
+    window.addEventListener("scroll", () => {
+      this.scheduleScrollSpySync();
+    }, { passive: true });
+
+    this.syncScrollSpyNow();
+  }
+
+  scheduleScrollSpySync() {
+    if (this._scrollRafId) return;
+    this._scrollRafId = requestAnimationFrame(() => {
+      this._scrollRafId = 0;
+      this.syncScrollSpyNow();
+    });
+  }
+
+  syncScrollSpyNow() {
+    const sections = Array.from(document.querySelectorAll(".chapter-section[data-stage]"));
     if (!sections.length) return;
 
-    this.scrollObserver = new IntersectionObserver((entries) => {
-      let bestStage = null;
-      let bestRatio = 0;
-      entries.forEach(entry => {
-        if (entry.isIntersecting && entry.intersectionRatio >= bestRatio) {
-          bestRatio = entry.intersectionRatio;
-          bestStage = parseInt(entry.target.getAttribute("data-stage"), 10);
-        }
-      });
-      if (bestStage && bestStage !== this.activeStage) {
-        this.activeStage = bestStage;
-        this.renderSidebar();
-      }
-    }, {
-      rootMargin: "-18% 0px -55% 0px",
-      threshold: [0.05, 0.25, 0.5]
-    });
+    const metrics = sections.map(sec => ({
+      stage: parseInt(sec.getAttribute("data-stage"), 10),
+      top: sec.getBoundingClientRect().top
+    }));
 
-    sections.forEach(sec => this.scrollObserver.observe(sec));
+    const viewportH = window.innerHeight || document.documentElement.clientHeight || 900;
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    const docH = Math.max(
+      document.body ? document.body.scrollHeight : 0,
+      document.documentElement ? document.documentElement.scrollHeight : 0
+    );
+
+    const computedStage = computeActiveStageFromLayout(metrics, viewportH, scrollY, docH, 0.28);
+
+    // If user clicked a sidebar chapter, keep that chapter highlighted until smooth scroll arrives
+    if (this._scrollLockTarget !== null) {
+      const targetMetric = metrics.find(m => m.stage === this._scrollLockTarget);
+      const arrived = computedStage === this._scrollLockTarget ||
+        (targetMetric && Math.abs(targetMetric.top - 84) < 28);
+      if (arrived) {
+        this._scrollLockTarget = null;
+        if (this._scrollLockTimer) {
+          clearTimeout(this._scrollLockTimer);
+          this._scrollLockTimer = null;
+        }
+      } else {
+        return;
+      }
+    }
+
+    if (computedStage !== this.activeStage) {
+      this.activeStage = computedStage;
+      this.updateSidebarActiveState();
+    }
   }
 
   setPrompt(text) {
@@ -123,6 +254,8 @@ class App {
     this.stagesRenderer.selectedTokenIndex = Math.max(0, this.tokens.length - 1);
     this.renderLiveTokenBar();
     this.renderAllStages();
+    this.updateHeroVisualPipeline();
+    this.updateStoryConnectors();
     this.updateVRAMCalculator();
   }
 
@@ -140,6 +273,8 @@ class App {
     }
     this.renderLiveTokenBar();
     this.renderAllStages();
+    this.updateHeroVisualPipeline();
+    this.updateStoryConnectors();
     this.updateVRAMCalculator();
   }
 
@@ -151,52 +286,285 @@ class App {
     const badge = document.getElementById("tokenCountBadge");
     if (badge) {
       const charCount = (this.currentPrompt || "").length;
-      badge.textContent = `${this.tokens.length} ${this.tokens.length === 1 ? "piece" : "pieces"} · ${charCount} letters`;
+      badge.textContent = `${this.tokens.length} ${this.tokens.length === 1 ? "token" : "tokens"} · ${charCount} chars`;
     }
+  }
+
+  markStageExplored(stageNum) {
+    const n = parseInt(stageNum, 10);
+    if (!n || n < 1 || n > 7) return;
+    if (!this.exploredStages.has(n)) {
+      this.exploredStages.add(n);
+      this.updateExploredHUD();
+    }
+  }
+
+  updateExploredHUD() {
+    const textEl = document.getElementById("sidebarExploredText");
+    if (textEl) {
+      textEl.textContent = `${this.exploredStages.size} / 7`;
+    }
+    const dotsEl = document.getElementById("sidebarExploredDots");
+    if (dotsEl) {
+      dotsEl.innerHTML = [1, 2, 3, 4, 5, 6, 7].map(n => `
+        <span class="explored-dot ${this.exploredStages.has(n) ? "is-done" : ""}" title="Stage ${n}"></span>
+      `).join("");
+    }
+  }
+
+  showMicroToast(message, tone = "teal") {
+    const toast = document.getElementById("microToast");
+    if (!toast) return;
+    toast.className = `micro-toast is-${tone} is-visible`;
+    toast.textContent = message;
+    if (this._toastTimer) clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => {
+      toast.classList.remove("is-visible");
+    }, 1800);
+  }
+
+  stepSpotlightToken(delta) {
+    if (!this.tokens.length || !window.pipelineStages) return;
+    const current = Math.min(this.stagesRenderer.selectedTokenIndex, this.tokens.length - 1);
+    const nextIdx = Math.max(0, Math.min(this.tokens.length - 1, current + delta));
+    window.pipelineStages.selectToken(nextIdx);
+  }
+
+  toggleSpotlightExpanded() {
+    this.spotlightExpanded = !this.spotlightExpanded;
+    this.renderLiveTokenBar();
   }
 
   renderLiveTokenBar() {
     const bar = document.getElementById("liveTokenBar");
     if (!bar) return;
 
-    const selectedIdx = Math.min(this.stagesRenderer.selectedTokenIndex, Math.max(0, this.tokens.length - 1));
-    bar.innerHTML = `
-      <span class="live-token-prefix">Pick a word to spotlight:</span>
-      ${this.tokens.map((t, idx) => `
+    const total = this.tokens.length;
+    const selectedIdx = Math.min(this.stagesRenderer.selectedTokenIndex, Math.max(0, total - 1));
+    const COMPACT_THRESHOLD = 9;
+
+    if (total <= COMPACT_THRESHOLD) {
+      this.spotlightExpanded = false;
+    }
+
+    const isLong = total > COMPACT_THRESHOLD;
+    const useWindow = isLong && !this.spotlightExpanded && typeof computeSpotlightWindow === "function";
+    const win = useWindow
+      ? computeSpotlightWindow(total, selectedIdx, 7)
+      : {
+          isCollapsed: false,
+          indices: this.tokens.map((_, i) => i),
+          hiddenBefore: 0,
+          hiddenAfter: 0
+        };
+
+    const renderChip = (idx) => {
+      const t = this.tokens[idx];
+      if (!t) return "";
+      return `
         <button
           type="button"
           class="live-token-chip ${idx === selectedIdx ? "is-selected" : ""}"
           onclick="if(window.pipelineStages) window.pipelineStages.selectToken(${idx})"
-          title="Spotlight word #${idx + 1} (${t.text})"
+          title="Spotlight word #${idx + 1} (${this.escapeHtml(t.text)})"
         >
           <span class="chip-idx">${idx + 1}</span>
           <span>${this.escapeHtml(t.text)}</span>
         </button>
-      `).join("")}
+      `;
+    };
+
+    bar.classList.toggle("is-expanded", isLong && this.spotlightExpanded);
+
+    bar.innerHTML = `
+      <div class="live-token-controls">
+        <span class="live-token-prefix">Spotlight word:</span>
+        ${isLong ? `
+          <div class="spotlight-nav-group" role="group" aria-label="Step through spotlight words">
+            <button
+              type="button"
+              class="spotlight-nav-btn"
+              onclick="if(window.app) window.app.stepSpotlightToken(-1)"
+              ${selectedIdx <= 0 ? "disabled" : ""}
+              aria-label="Previous spotlight word"
+              title="Previous word"
+            >&lsaquo;</button>
+            <span class="spotlight-counter mono tabular-nums">${selectedIdx + 1}/${total}</span>
+            <button
+              type="button"
+              class="spotlight-nav-btn"
+              onclick="if(window.app) window.app.stepSpotlightToken(1)"
+              ${selectedIdx >= total - 1 ? "disabled" : ""}
+              aria-label="Next spotlight word"
+              title="Next word"
+            >&rsaquo;</button>
+          </div>
+        ` : ""}
+      </div>
+
+      <div class="live-token-rail ${isLong && this.spotlightExpanded ? "is-expanded" : ""}">
+        ${win.hiddenBefore > 0 ? `
+          <button
+            type="button"
+            class="live-token-ellipsis"
+            onclick="if(window.app) window.app.stepSpotlightToken(-5)"
+            title="Show ${win.hiddenBefore} earlier ${win.hiddenBefore === 1 ? "word" : "words"}"
+          >&laquo; +${win.hiddenBefore}</button>
+        ` : ""}
+        ${win.indices.map(renderChip).join("")}
+        ${win.hiddenAfter > 0 ? `
+          <button
+            type="button"
+            class="live-token-ellipsis"
+            onclick="if(window.app) window.app.stepSpotlightToken(5)"
+            title="Show ${win.hiddenAfter} later ${win.hiddenAfter === 1 ? "word" : "words"}"
+          >+${win.hiddenAfter} &raquo;</button>
+        ` : ""}
+      </div>
+
+      ${isLong ? `
+        <button
+          type="button"
+          class="spotlight-toggle-btn"
+          onclick="if(window.app) window.app.toggleSpotlightExpanded()"
+          aria-expanded="${this.spotlightExpanded ? "true" : "false"}"
+        >${this.spotlightExpanded ? "Compact" : `All ${total}`}</button>
+      ` : ""}
     `;
+  }
+
+  runHeroPulseDemo() {
+    this._heroPulseTimers.forEach(t => clearTimeout(t));
+    this._heroPulseTimers = [];
+    const btn = document.getElementById("heroPulseBtn");
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `<span class="mono">Thinking...</span>`;
+    }
+
+    [1, 2, 3, 4].forEach((step, idx) => {
+      const timer = setTimeout(() => {
+        this._heroPulseStep = step;
+        this.highlightHeroPulseStep(step);
+      }, idx * 420);
+      this._heroPulseTimers.push(timer);
+    });
+
+    const finishTimer = setTimeout(() => {
+      this._heroPulseStep = 0;
+      this.sampleAndAppendToken();
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6,4 20,12 6,20"/></svg><span>Watch It Think</span>`;
+      }
+      this.highlightHeroPulseStep(0);
+    }, 1780);
+    this._heroPulseTimers.push(finishTimer);
+  }
+
+  highlightHeroPulseStep(step) {
+    const strip = document.getElementById("heroVisualPipeline");
+    if (!strip) return;
+    strip.querySelectorAll("[data-hero-step]").forEach(node => {
+      const s = parseInt(node.getAttribute("data-hero-step"), 10);
+      node.classList.toggle("is-pulsing", s === step);
+      node.classList.toggle("is-done", step > 0 && s < step);
+    });
+  }
+
+  updateHeroVisualPipeline() {
+    const strip = document.getElementById("heroVisualPipeline");
+    if (!strip || !this.tokens.length) return;
+
+    const selectedIdx = Math.min(this.stagesRenderer.selectedTokenIndex, Math.max(0, this.tokens.length - 1));
+    const focusTok = this.tokens[selectedIdx] || this.tokens[0];
+    const focusVec = this.math.getTokenEmbedding(focusTok, this.hyperparams.d_model);
+    const topPred = this.math.computeLayerSortedLogits(this.tokens, 12, VOCABULARY_LIST, this.hyperparams.d_model)[0];
+
+    strip.innerHTML = `
+      <button type="button" class="hero-flow-node" data-hero-step="1" onclick="window.app.setActiveStage(1)">
+        <span class="hero-flow-head">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M7 8V5h4v3M13 8V5h4v3"/></svg>
+          <span class="hero-flow-step">1 · Tokenization</span>
+        </span>
+        <span class="hero-flow-visual mono">"${this.escapeHtml(focusTok.text)}" &rarr; #${focusTok.id}</span>
+        <span class="hero-flow-caption tabular-nums">${this.tokens.length} tokens (BPE)</span>
+      </button>
+      <div class="hero-wire" aria-hidden="true"><span class="wire-packet"></span></div>
+      <button type="button" class="hero-flow-node" data-hero-step="2" onclick="window.app.setActiveStage(2)">
+        <span class="hero-flow-head">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2L3 7v10l9 5 9-5V7l-9-5z"/><path d="M12 22V12M12 12l9-5M12 12L3 7"/></svg>
+          <span class="hero-flow-step">2–3 · Embeddings + RoPE</span>
+        </span>
+        <span class="hero-flow-visual mono">[${focusVec[0].toFixed(1)}, ${focusVec[1].toFixed(1)}]</span>
+        <span class="hero-flow-caption tabular-nums">${selectedIdx * 36}&deg; position</span>
+      </button>
+      <div class="hero-wire" aria-hidden="true"><span class="wire-packet delay-1"></span></div>
+      <button type="button" class="hero-flow-node" data-hero-step="3" onclick="window.app.setActiveStage(4)">
+        <span class="hero-flow-head">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><circle cx="12" cy="6" r="3"/><path d="M8 15.5L11 8.5M16 15.5L13 8.5"/></svg>
+          <span class="hero-flow-step">4–6 · Self-Attention &times;12</span>
+        </span>
+        <span class="hero-flow-visual">12 Layers</span>
+        <span class="hero-flow-caption">Block + Logits</span>
+      </button>
+      <div class="hero-wire" aria-hidden="true"><span class="wire-packet delay-2"></span></div>
+      <button type="button" class="hero-flow-node is-accent" data-hero-step="4" onclick="window.app.setActiveStage(7)">
+        <span class="hero-flow-head">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 4"/></svg>
+          <span class="hero-flow-step">7 · Softmax Sampling</span>
+        </span>
+        <span class="hero-flow-visual mono">"${this.escapeHtml(topPred ? topPred.token : "...")}"</span>
+        <span class="hero-flow-caption">Next token</span>
+      </button>
+    `;
+    if (this._heroPulseStep > 0) {
+      this.highlightHeroPulseStep(this._heroPulseStep);
+    }
+  }
+
+  updateStoryConnectors() {
+    if (!this.tokens.length) return;
+    const selectedIdx = Math.min(this.stagesRenderer.selectedTokenIndex, Math.max(0, this.tokens.length - 1));
+    const focusTok = this.tokens[selectedIdx] || this.tokens[0];
+    const focusVec = this.math.getTokenEmbedding(focusTok, this.hyperparams.d_model);
+    const wordEsc = this.escapeHtml(focusTok.text);
+
+    const bridges = [
+      { id: "connector-1-2", chip: `"${wordEsc}" #${focusTok.id}`, text: "Embeddings" },
+      { id: "connector-2-3", chip: `[${focusVec[0].toFixed(1)}, ${focusVec[1].toFixed(1)}]`, text: "Positional Encoding (RoPE)" },
+      { id: "connector-3-4", chip: `#${selectedIdx + 1} · ${selectedIdx * 36}°`, text: "Self-Attention" },
+      { id: "connector-4-5", chip: `"${wordEsc}" + context`, text: "Transformer Block" },
+      { id: "connector-5-6", chip: "Layer 1 Done", text: "Layer Stack & Logits" },
+      { id: "connector-6-7", chip: "Logits Ready", text: "Softmax & Sampling" }
+    ];
+
+    bridges.forEach((b, idx) => {
+      const el = document.getElementById(b.id);
+      if (el) {
+        el.innerHTML = `
+          <div class="connector-track-pulse" style="animation-delay:${(idx * 0.35).toFixed(2)}s;"></div>
+          <div class="connector-pill-wrap">
+            <span class="connector-arrow" aria-hidden="true">&darr;</span>
+            <span class="connector-token mono">${b.chip}</span>
+            <span class="connector-sep" aria-hidden="true">&rarr;</span>
+            <span class="connector-text">${b.text}</span>
+          </div>
+        `;
+      }
+    });
   }
 
   renderSidebar() {
     const nav = document.getElementById("sidebarNav");
-    const progressEl = document.getElementById("sidebarProgressText");
-    if (progressEl) {
-      progressEl.textContent = `Chapter ${this.activeStage} / ${this.stageList.length}`;
-    }
-    const progressFill = document.getElementById("sidebarProgressFill");
-    if (progressFill) {
-      progressFill.style.width = `${Math.round((this.activeStage / this.stageList.length) * 100)}%`;
-    }
-    if (!nav) return;
-
-    nav.innerHTML = this.stageList.map(st => {
-      const isActive = this.activeStage === st.id;
-      const isCompleted = this.activeStage > st.id;
-      return `
+    if (nav) {
+      nav.innerHTML = this.stageList.map(st => `
         <button
           type="button"
-          class="sidebar-stage-btn ${isActive ? "active" : ""} ${isCompleted ? "completed" : ""}"
+          class="sidebar-stage-btn"
+          data-sidebar-stage="${st.id}"
           onclick="if(window.app) window.app.setActiveStage(${st.id})"
-          aria-current="${isActive ? "step" : "false"}"
+          aria-current="false"
         >
           <span class="sidebar-step-num">${st.id}</span>
           <span class="sidebar-stage-copy">
@@ -204,14 +572,50 @@ class App {
             <span class="sidebar-stage-sub">${st.sub}</span>
           </span>
         </button>
-      `;
-    }).join("");
+      `).join("");
+    }
+    this.updateSidebarActiveState();
+  }
+
+  updateSidebarActiveState() {
+    const progressEl = document.getElementById("sidebarProgressText");
+    if (progressEl) {
+      progressEl.textContent = `${this.activeStage} / ${this.stageList.length}`;
+    }
+    const progressFill = document.getElementById("sidebarProgressFill");
+    if (progressFill) {
+      progressFill.style.width = `${Math.round((this.activeStage / this.stageList.length) * 100)}%`;
+    }
+
+    const nav = document.getElementById("sidebarNav");
+    if (!nav) return;
+
+    const buttons = nav.querySelectorAll("[data-sidebar-stage]");
+    buttons.forEach(btn => {
+      const stId = parseInt(btn.getAttribute("data-sidebar-stage"), 10);
+      const isActive = this.activeStage === stId;
+      const isCompleted = this.activeStage > stId;
+      btn.classList.toggle("active", isActive);
+      btn.classList.toggle("completed", isCompleted);
+      btn.setAttribute("aria-current", isActive ? "step" : "false");
+    });
   }
 
   setActiveStage(stageNum) {
-    this.activeStage = Math.max(1, Math.min(7, stageNum));
-    this.renderSidebar();
-    const target = document.getElementById(`stage-${this.activeStage}`);
+    const clamped = Math.max(1, Math.min(7, stageNum));
+    this.activeStage = clamped;
+    this.updateSidebarActiveState();
+
+    // Lock scroll-spy briefly so smooth scrolling doesn't flash intermediate chapters
+    this._scrollLockTarget = clamped;
+    if (this._scrollLockTimer) clearTimeout(this._scrollLockTimer);
+    this._scrollLockTimer = setTimeout(() => {
+      this._scrollLockTarget = null;
+      this._scrollLockTimer = null;
+      this.syncScrollSpyNow();
+    }, 850);
+
+    const target = document.getElementById(`stage-${clamped}`);
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -250,6 +654,7 @@ class App {
     if (!skipFullRender) {
       this.renderAllStages();
     }
+    this.updateHeroVisualPipeline();
     this.updateVRAMCalculator();
   }
 
@@ -300,8 +705,12 @@ class App {
 
     this.updateTokens();
     this.stagesRenderer.selectedTokenIndex = Math.max(0, this.tokens.length - 1);
+    this.markStageExplored(7);
+    this.showMicroToast(`+ "${word}" added`, "teal");
     this.renderLiveTokenBar();
     this.renderAllStages();
+    this.updateHeroVisualPipeline();
+    this.updateStoryConnectors();
     this.updateVRAMCalculator();
 
     if (window.vectorView) {
@@ -314,7 +723,7 @@ class App {
     const btn = document.getElementById("btnAutoPlay");
 
     if (this.isAutoPlaying) {
-      if (btn) btn.textContent = "Pause Auto-Play";
+      if (btn) btn.textContent = "Pause Auto-Write";
       this.autoPlayInterval = setInterval(() => {
         if (this.tokens.length >= 24) {
           this.toggleAutoPlay();
@@ -323,7 +732,7 @@ class App {
         this.sampleAndAppendToken();
       }, 1200);
     } else {
-      if (btn) btn.textContent = "Auto-Play";
+      if (btn) btn.textContent = "Auto-Write";
       if (this.autoPlayInterval) {
         clearInterval(this.autoPlayInterval);
         this.autoPlayInterval = null;
@@ -365,19 +774,19 @@ class App {
       container.innerHTML = `
         <div class="vram-calc-grid">
           <div class="vram-stat-card">
-            <div class="vram-stat-title">Brain Connections (Parameters)</div>
+            <div class="vram-stat-title">Brain Connections</div>
             <div class="vram-stat-val tabular-nums">${formatParams(specs.totalParams)}</div>
           </div>
           <div class="vram-stat-card">
-            <div class="vram-stat-title">Standard GPU Memory (FP16)</div>
+            <div class="vram-stat-title">GPU Memory (FP16)</div>
             <div class="vram-stat-val tabular-nums">${specs.fp16GB} GB</div>
           </div>
           <div class="vram-stat-card">
-            <div class="vram-stat-title">Compressed Memory (INT4)</div>
+            <div class="vram-stat-title">Compressed (INT4)</div>
             <div class="vram-stat-val tabular-nums">${specs.int4GB} GB</div>
           </div>
           <div class="vram-stat-card">
-            <div class="vram-stat-title">Short-Term Scratchpad (${seq_len.toLocaleString()} words)</div>
+            <div class="vram-stat-title">Short-Term Memory (${seq_len.toLocaleString()} words)</div>
             <div class="vram-stat-val tabular-nums">${specs.kvCacheMB} MB</div>
           </div>
         </div>
@@ -398,7 +807,7 @@ function startApp() {
   if (!window.app) {
     try {
       window.app = new App();
-      console.log("Transformer Lab single-page story initialized.");
+      console.log("Transformer Lab visual story initialized.");
     } catch (err) {
       console.error("Error initializing App:", err);
     }
