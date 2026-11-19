@@ -376,3 +376,18 @@ if (typeof global !== "undefined") {
   global.getBPEMergeSteps = getBPEMergeSteps;
   global.hashString = hashString;
 }
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    VOCABULARY_LIST,
+    BACKGROUND_ANCHORS,
+    tokenizeBPE,
+    tokenizeWordLevel,
+    tokenizeCharLevel,
+    formatToken,
+    getBPEMergeSteps,
+    hashString,
+    stringToUtf8Bytes,
+    bytesToHexArray
+  };
+}

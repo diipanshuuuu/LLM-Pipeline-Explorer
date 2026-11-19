@@ -519,6 +519,40 @@ class MathEngine {
     };
   }
 
+  // Layer-aware sorted logits for progressive depth inspection (Layers 1..12)
+  computeLayerSortedLogits(tokens, layerIndex = 12, vocabularyList, d_model = 8) {
+    const safeTokens = (tokens && tokens.length > 0) ? tokens : [{ text: "the", vectorHint: [0.2, 0.1, 0.05] }];
+    const lastToken = safeTokens[safeTokens.length - 1];
+    const baseVec = this.getTokenEmbedding(lastToken, d_model);
+    const depthRatio = Math.max(0, Math.min(1, (layerIndex - 1) / 11));
+
+    // Blend context across preceding tokens as depth increases
+    const contextVec = new Array(d_model).fill(0);
+    safeTokens.forEach((tok, idx) => {
+      const emb = this.getTokenEmbedding(tok, d_model);
+      const recencyWeight = Math.pow(0.7, safeTokens.length - 1 - idx);
+      for (let i = 0; i < d_model; i++) {
+        contextVec[i] += emb[i] * recencyWeight;
+      }
+    });
+    const ctxNorm = MathEngine.norm(contextVec);
+    const normContext = contextVec.map(v => v / ctxNorm);
+
+    // Interpolate hidden state from surface token (layer 1) to full contextual prediction (layer 12)
+    const hidden = baseVec.map((v, i) => (1 - depthRatio * 0.65) * v + (depthRatio * 0.65) * normContext[i]);
+    const logits = this.computeLogits(hidden, vocabularyList, d_model);
+
+    // Early layers emphasize syntax/grammar; deeper layers sharpen semantic predictions
+    return logits.map(item => {
+      const syntaxBias = item.cluster === "grammar" || item.cluster === "punct" ? (1 - depthRatio) * 1.4 : 0;
+      const semanticBoost = depthRatio * 0.8 * (item.rawLogit > 0 ? item.rawLogit : 0);
+      return {
+        ...item,
+        rawLogit: item.rawLogit + syntaxBias + semanticBoost
+      };
+    }).sort((a, b) => b.rawLogit - a.rawLogit);
+  }
+
   // Model Parameter & VRAM Calculator
   static calculateModelSpecs({
     d_model = 4096,
@@ -576,3 +610,6 @@ class MathEngine {
 
 if (typeof window !== "undefined") window.MathEngine = MathEngine;
 if (typeof global !== "undefined") global.MathEngine = MathEngine;
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { MathEngine };
+}
