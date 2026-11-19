@@ -1,4 +1,6 @@
-# LLM Pipeline Explorer: Under the Hood
+# Cortext — How AI Thinks, Step by Step
+
+![Cortext Preview](og-image.png)
 
 An interactive, real-time 3D web application visually and mathematically explaining every stage and parameter of a modern **Decoder-only Transformer Large Language Model (LLM)**.
 

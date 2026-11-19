@@ -17,5 +17,5 @@ app.use((req, res, next) => {
 });
 
 app.listen(PORT, HOST, () => {
-  console.log(`LLM Pipeline Explorer listening on http://${HOST}:${PORT}`);
+  console.log(`Cortext listening on http://${HOST}:${PORT}`);
 });

@@ -1,7 +1,7 @@
 {
-  "name": "llm-pipeline-explorer",
+  "name": "cortext",
   "version": "1.0.0",
-  "description": "Interactive 3D web application visually and mathematically explaining every stage of a Decoder-only Transformer LLM.",
+  "description": "Cortext — Interactive 3D web application visually and mathematically explaining every stage of a Decoder-only Transformer LLM.",
   "main": "server.js",
   "scripts": {
     "dev": "node server.js",

@@ -5,7 +5,7 @@
  */
 
 const DEFAULT_PROMPT = "The quick brown fox jumps over the";
-const THEME_STORAGE_KEY = "transformer-lab-theme";
+const THEME_STORAGE_KEY = "cortext-theme";
 
 class App {
   constructor() {
@@ -807,7 +807,7 @@ function startApp() {
   if (!window.app) {
     try {
       window.app = new App();
-      console.log("Transformer Lab visual story initialized.");
+      console.log("Cortext visual story initialized.");
     } catch (err) {
       console.error("Error initializing App:", err);
     }
