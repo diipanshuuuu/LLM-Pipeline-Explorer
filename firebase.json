@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "cortext-ai",
+    "site": "unpromted",
     "public": ".",
     "ignore": [
       "firebase.json",
