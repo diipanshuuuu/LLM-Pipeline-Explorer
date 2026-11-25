@@ -1,55 +1,71 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark" class="dark">
+<html lang="en" data-theme="dark" data-level="beginner" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cortext — How AI Thinks, Step by Step</title>
-  <meta name="description" content="Cortext is a visual, interactive scrolling story that shows how an AI brain turns your sentence into its next word—from LEGO word bricks and 3D maps to spinning a live prize wheel.">
-
-  <!-- Favicon & Touch Icons -->
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="64x64" href="favicon.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-  <meta name="theme-color" content="#0F172A">
-
-  <!-- Open Graph / Social Sharing Metadata -->
+  <title>Unprompted — Inside How AI Predicts Every Word</title>
+  <meta name="description" content="Open the black box of AI. Explore tokenization, 3D embeddings, self-attention, sampling, and real DistilGPT-2 perplexity interactively with Unprompted.">
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Cortext">
-  <meta property="og:title" content="Cortext — How AI Thinks, Step by Step">
-  <meta property="og:description" content="Scroll through 7 visual interactive chapters to watch how an AI reads your sentence and predicts the next word.">
-  <meta property="og:image" content="og-image.png">
+  <meta property="og:site_name" content="Unprompted">
+  <meta property="og:title" content="Unprompted — Inside How AI Predicts Every Word">
+  <meta property="og:description" content="Open the black box. See how AI turns your prompt into tokens, 3D meaning maps, self-attention clues, Softmax probabilities, and live DistilGPT-2 perplexity.">
+  <meta property="og:image" content="/preview.png?v=29">
+  <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-
-  <!-- Twitter Card -->
+  <meta property="og:image:alt" content="Unprompted minimal editorial preview showing the wordmark and clean next-word probability breakdown">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Cortext — How AI Thinks, Step by Step">
-  <meta name="twitter:description" content="Scroll through 7 visual interactive chapters to watch how an AI reads your sentence and predicts the next word.">
-  <meta name="twitter:image" content="og-image.png">
+  <meta name="twitter:title" content="Unprompted — Inside How AI Predicts Every Word">
+  <meta name="twitter:description" content="Open the black box. See how AI turns your prompt into tokens, 3D meaning maps, self-attention clues, Softmax probabilities, and live DistilGPT-2 perplexity.">
+  <meta name="twitter:image" content="/preview.png?v=29">
+  <meta name="theme-color" content="#0E1013">
+  <link rel="icon" href="/favicon.svg?v=29" type="image/svg+xml">
+  <link rel="icon" href="/favicon.ico?v=29" sizes="32x32">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=29">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Unprompted",
+    "applicationCategory": "EducationalApplication",
+    "operatingSystem": "All",
+    "description": "Interactive visual guide opening the black box of AI language models through tokenization, 3D embeddings, RoPE, self-attention, sampling, and real DistilGPT-2 perplexity.",
+    "image": "/preview.png",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
 
   <script>
     (function () {
       try {
-        var saved = localStorage.getItem("cortext-theme") || localStorage.getItem("transformer-lab-theme");
+        var saved = localStorage.getItem("unprompted-theme");
         var theme = saved === "light" ? "light" : "dark";
         document.documentElement.setAttribute("data-theme", theme);
         document.documentElement.classList.toggle("dark", theme === "dark");
+        var savedLevel = localStorage.getItem("unprompted-level");
+        var level = savedLevel === "deep" ? "deep" : "beginner";
+        document.documentElement.setAttribute("data-level", level);
       } catch (e) {
         document.documentElement.setAttribute("data-theme", "dark");
         document.documentElement.classList.add("dark");
+        document.documentElement.setAttribute("data-level", "beginner");
       }
     })();
   </script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=18">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css?v=29">
 
   <!-- Local 3D Engine Scripts (Zero CDN Dependencies) -->
-  <script src="js/three.min.js?v=18"></script>
-  <script src="js/OrbitControls.js?v=18"></script>
+  <script src="js/three.min.js?v=29"></script>
+  <script src="js/OrbitControls.js?v=29"></script>
 </head>
 <body id="top">
 
@@ -62,14 +78,11 @@
   <header class="top-bar">
     <div class="top-bar-inner">
       <a href="#top" class="brand-wordmark">
-        <svg class="brand-mark" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M19 6C15 2.5 6.5 3.5 5 10C3.5 16.5 8.5 21 16.5 20C18.5 19.5 19 18.5 19 18.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-          <circle cx="18.5" cy="6" r="2" fill="currentColor"/>
-          <circle cx="5" cy="11" r="1.6" fill="currentColor"/>
-          <circle cx="16.5" cy="19.5" r="1.8" fill="currentColor"/>
-          <path d="M7 9.5L16 14" stroke="currentColor" stroke-width="1.2" stroke-dasharray="1.5 1.5" opacity="0.6"/>
+        <svg class="brand-mark" width="22" height="22" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+          <path d="M14 10V34C14 43.9411 22.0589 52 32 52C41.9411 52 50 43.9411 50 34V23" stroke="currentColor" stroke-width="8.5" stroke-linecap="butt"/>
+          <rect x="45.75" y="10" width="8.5" height="7.5" fill="currentColor"/>
         </svg>
-        <span>Cortext</span>
+        <span>Unprompted</span>
       </a>
 
       <nav class="top-nav-links" aria-label="Jump to section">
@@ -77,6 +90,7 @@
         <a href="#stage-2" class="top-nav-link" onclick="if(window.app){ event.preventDefault(); window.app.setActiveStage(2); }">2. Embeddings</a>
         <a href="#stage-4" class="top-nav-link" onclick="if(window.app){ event.preventDefault(); window.app.setActiveStage(4); }">4. Self-Attention</a>
         <a href="#stage-7" class="top-nav-link" onclick="if(window.app){ event.preventDefault(); window.app.setActiveStage(7); }">7. Sampling</a>
+        <a href="#stage-8" class="top-nav-link top-nav-link-accent" onclick="if(window.app){ event.preventDefault(); window.app.setActiveStage(8); }">8. Perplexity</a>
       </nav>
 
       <div class="top-bar-cta">
@@ -90,47 +104,67 @@
   <!-- ============================================================== -->
   <!-- VISUAL STORY HERO + LIVE SENTENCE PLAYGROUND                   -->
   <!-- ============================================================== -->
-  <section class="hero-workbench" aria-label="Interactive sentence playground">
+  <section class="hero-workbench" id="heroWorkbench" aria-label="Interactive sentence playground">
     <div class="hero-inner">
       <div class="hero-utility-row">
-        <span class="hero-kicker">Interactive AI Lab &middot; 7 Live Machines</span>
-        <div class="theme-switcher" role="group" aria-label="Color theme">
-          <button
-            type="button"
-            id="themeDarkBtn"
-            class="theme-btn is-active"
-            aria-pressed="true"
-            onclick="if(window.app) window.app.setTheme('dark')"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-            </svg>
-            <span>Dark</span>
-          </button>
-          <button
-            type="button"
-            id="themeLightBtn"
-            class="theme-btn"
-            aria-pressed="false"
-            onclick="if(window.app) window.app.setTheme('light')"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <circle cx="12" cy="12" r="4"/>
-              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
-            </svg>
-            <span>Light</span>
-          </button>
+        <span class="hero-kicker">No AI background needed &middot; 8 Interactive Steps</span>
+        <div class="hero-utility-controls">
+          <div class="level-switcher" role="group" aria-label="Explanation detail level">
+            <button
+              type="button"
+              id="levelBeginnerBtn"
+              class="theme-btn is-active"
+              aria-pressed="true"
+              onclick="if(window.app) window.app.setExperienceLevel('beginner')"
+            >
+              <span>Beginner</span>
+            </button>
+            <button
+              type="button"
+              id="levelDeepBtn"
+              class="theme-btn"
+              aria-pressed="false"
+              onclick="if(window.app) window.app.setExperienceLevel('deep')"
+            >
+              <span>Deep Lab</span>
+            </button>
+          </div>
+          <div class="theme-switcher" role="group" aria-label="Color theme">
+            <button
+              type="button"
+              id="themeDarkBtn"
+              class="theme-btn is-active"
+              aria-pressed="true"
+              onclick="if(window.app) window.app.setTheme('dark')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+              <span>Dark</span>
+            </button>
+            <button
+              type="button"
+              id="themeLightBtn"
+              class="theme-btn"
+              aria-pressed="false"
+              onclick="if(window.app) window.app.setTheme('light')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"/>
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+              </svg>
+              <span>Light</span>
+            </button>
+          </div>
         </div>
       </div>
 
       <div class="hero-copy-row">
         <div class="hero-copy-block">
-          <h1 class="hero-headline">See an AI brain think&mdash;live.</h1>
-          <div class="hero-quick-tags" aria-hidden="true">
-            <span class="quick-tag"><span class="quick-dot is-orange"></span>Type</span>
-            <span class="quick-tag"><span class="quick-dot is-teal"></span>Tap</span>
-            <span class="quick-tag"><span class="quick-dot is-amber"></span>Spin</span>
-          </div>
+          <h1 class="hero-headline">How does AI guess the next word?</h1>
+          <p class="hero-beginner-sub">
+            AI like ChatGPT doesn&rsquo;t think like a human&mdash;it reads your sentence and predicts <strong>one word at a time</strong>. Type anything below, then scroll through 8 hands-on steps.
+          </p>
         </div>
         <button type="button" id="heroPulseBtn" class="btn btn-primary hero-pulse-cta" onclick="if(window.app) window.app.runHeroPulseDemo()">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6,4 20,12 6,20"/></svg>
@@ -147,8 +181,8 @@
         <div class="workbench-top">
           <div class="prompt-field-group">
             <div class="prompt-label-row">
-              <label for="promptInput" class="prompt-label">Live Prompt</label>
-              <span id="tokenCountBadge" class="prompt-meta tabular-nums">7 tokens &middot; 34 chars</span>
+              <label for="promptInput" class="prompt-label">Try a sentence (every step below uses this!)</label>
+              <span id="tokenCountBadge" class="prompt-meta tabular-nums deep-only">7 tokens &middot; 34 chars</span>
             </div>
             <div class="prompt-input-row">
               <input
@@ -156,7 +190,7 @@
                 id="promptInput"
                 class="prompt-input"
                 value="The quick brown fox jumps over the"
-                placeholder="Type anything..."
+                placeholder="Type any sentence..."
               >
               <button type="button" id="btnAutoPlay" class="btn btn-secondary" onclick="if(window.app) window.app.toggleAutoPlay()">
                 Auto-Write
@@ -168,7 +202,7 @@
           </div>
 
           <div class="presets-group">
-            <span class="presets-label">Presets</span>
+            <span class="presets-label">Quick examples</span>
             <div class="presets-list">
               <button type="button" class="preset-btn" onclick="if(window.app) window.app.setPrompt('The quick brown fox jumps over the')">Fox jumps</button>
               <button type="button" class="preset-btn" onclick="if(window.app) window.app.setPrompt('In a galaxy far far away the stars')">Galaxy</button>
@@ -178,8 +212,8 @@
           </div>
         </div>
 
-        <!-- Live Interactive Token Ribbon -->
-        <div class="live-token-bar" id="liveTokenBar" aria-label="Active sentence words">
+        <!-- Live Interactive Token Ribbon (shown in Deep Lab or expanded) -->
+        <div class="live-token-bar deep-only" id="liveTokenBar" aria-label="Active sentence words">
           <!-- Rendered dynamically by app.renderLiveTokenBar() -->
         </div>
       </div>
@@ -195,10 +229,10 @@
     <aside class="stages-sidebar" aria-label="Scroll progress and chapters">
       <div class="sidebar-header-row">
         <span class="sidebar-label">Pipeline</span>
-        <span id="sidebarProgressText" class="sidebar-progress tabular-nums">1 / 7</span>
+        <span id="sidebarProgressText" class="sidebar-progress tabular-nums">1 / 8</span>
       </div>
       <div class="sidebar-progress-track" aria-hidden="true">
-        <div id="sidebarProgressFill" class="sidebar-progress-fill" style="width:14.3%;"></div>
+        <div id="sidebarProgressFill" class="sidebar-progress-fill" style="width:12.5%;"></div>
       </div>
       <nav class="sidebar-nav" id="sidebarNav">
         <!-- Rendered dynamically by app.renderSidebar() -->
@@ -206,7 +240,7 @@
       <div class="sidebar-hud" id="sidebarHud">
         <div class="sidebar-hud-row">
           <span class="sidebar-hud-label">Explored</span>
-          <span id="sidebarExploredText" class="mono tabular-nums sidebar-hud-val">0 / 7</span>
+          <span id="sidebarExploredText" class="mono tabular-nums sidebar-hud-val">0 / 8</span>
         </div>
         <div class="sidebar-explored-dots" id="sidebarExploredDots" aria-hidden="true"></div>
       </div>
@@ -233,6 +267,9 @@
       <div class="chapter-connector" id="connector-6-7" aria-hidden="true"></div>
 
       <section id="stage-7" class="chapter-section" data-stage="7" aria-label="Chapter 7: Softmax and Sampling"></section>
+      <div class="chapter-connector" id="connector-7-8" aria-hidden="true"></div>
+
+      <section id="stage-8" class="chapter-section" data-stage="8" aria-label="Chapter 8: Perplexity Explorer"></section>
     </main>
 
   </div>
@@ -242,7 +279,7 @@
   <!-- ============================================================== -->
   <footer id="vram-section" class="app-footer">
     <div class="footer-inner">
-      <details class="vram-accordion">
+      <details class="vram-accordion deep-only">
         <summary class="vram-summary">
           <span class="vram-summary-title">Real AI Sizes (Memory Calculator)</span>
           <span class="vram-summary-hint">GPT-2 &rarr; LLaMA-3 70B &darr;</span>
@@ -264,17 +301,19 @@
         </div>
       </details>
       <div class="footer-meta">
-        Cortext &middot; Interactive LLM Architecture Playground
+        Unprompted &middot; Interactive Field Guide to How AI Predicts Every Word
       </div>
     </div>
   </footer>
 
   <!-- Scripts -->
-  <script src="js/vocabulary.js?v=18"></script>
-  <script src="js/math-engine.js?v=18"></script>
-  <script src="js/story-helpers.js?v=18"></script>
-  <script src="js/three-viewport.js?v=18"></script>
-  <script src="js/stages.js?v=18"></script>
-  <script src="js/app.js?v=18"></script>
+  <script src="js/vocabulary.js?v=29"></script>
+  <script src="js/math-engine.js?v=29"></script>
+  <script src="js/story-helpers.js?v=29"></script>
+  <script src="js/perplexity-math.js?v=29"></script>
+  <script src="js/three-viewport.js?v=29"></script>
+  <script src="js/stages.js?v=29"></script>
+  <script src="js/perplexity-explorer.js?v=29"></script>
+  <script src="js/app.js?v=29"></script>
 </body>
 </html>

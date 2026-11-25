@@ -1,18 +1,19 @@
 {
-  "name": "cortext",
+  "name": "unprompted",
   "version": "1.0.0",
-  "description": "Cortext — Interactive 3D web application visually and mathematically explaining every stage of a Decoder-only Transformer LLM.",
+  "description": "Unprompted — Interactive visual field guide opening the black box of AI language models through tokenization, 3D embeddings, self-attention, sampling, and live DistilGPT-2 perplexity.",
   "main": "server.js",
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "build": "node --check server.js && node --check js/story-helpers.js && node --check js/app.js && node --check js/math-engine.js && node --check js/stages.js && node --check js/three-viewport.js && node --check js/vocabulary.js",
-    "lint": "node --check server.js && node --check js/story-helpers.js && node --check js/app.js && node --check js/math-engine.js && node --check js/stages.js && node --check js/three-viewport.js && node --check js/vocabulary.js"
+    "build": "node --check server.js && node --check lib/distilgpt2-service.js && node --check js/story-helpers.js && node --check js/perplexity-math.js && node --check js/perplexity-explorer.js && node --check js/app.js && node --check js/math-engine.js && node --check js/stages.js && node --check js/three-viewport.js && node --check js/vocabulary.js",
+    "lint": "node --check server.js && node --check lib/distilgpt2-service.js && node --check js/story-helpers.js && node --check js/perplexity-math.js && node --check js/perplexity-explorer.js && node --check js/app.js && node --check js/math-engine.js && node --check js/stages.js && node --check js/three-viewport.js && node --check js/vocabulary.js"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.2",
     "express": "^5.3.0"
   }
 }

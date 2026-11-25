@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" fill="none">
+  <!-- Plain Matte Charcoal Canvas (Zero Gradients, Zero Glows, Zero Blobs) -->
+  <rect width="1200" height="630" fill="#0E1013"/>
+  <rect x="28" y="28" width="1144" height="574" rx="16" stroke="#1E2229" stroke-width="1"/>
+
+  <!-- Top Minimal Monochrome Mark -->
+  <g transform="translate(88, 84)">
+    <rect width="48" height="48" rx="11" fill="#171A20" stroke="#262B34" stroke-width="1"/>
+    <g transform="translate(0, 0) scale(0.75)">
+      <path d="M18 15V34C18 41.732 24.268 48 32 48C39.732 48 46 41.732 46 34V25" stroke="#F4F4F2" stroke-width="7.5" stroke-linecap="butt"/>
+      <rect x="42.25" y="15" width="7.5" height="6" fill="#F4F4F2"/>
+    </g>
+  </g>
+
+  <!-- Quiet Top-Right Editorial Label -->
+  <text x="1112" y="114" text-anchor="end" font-family="'JetBrains Mono', monospace" font-size="13" font-weight="500" letter-spacing="0.4" fill="#6F7785">Interactive Guide · DistilGPT-2</text>
+
+  <!-- Primary Editorial Title & Plain Subtitle -->
+  <text x="88" y="274" font-family="'Bricolage Grotesque', -apple-system, sans-serif" font-size="84" font-weight="700" letter-spacing="-3" fill="#F4F4F2">Unprompted</text>
+  <text x="90" y="330" font-family="'DM Sans', -apple-system, sans-serif" font-size="25" font-weight="400" fill="#9AA2AE">See how AI turns text into tokens, meaning,</text>
+  <text x="90" y="366" font-family="'DM Sans', -apple-system, sans-serif" font-size="25" font-weight="400" fill="#9AA2AE">attention, and the next predicted word.</text>
+
+  <!-- Plain Minimal Hairline Divider & Monochrome Probability Specimen on Right -->
+  <line x1="744" y1="204" x2="744" y2="416" stroke="#1E2229" stroke-width="1"/>
+
+  <g transform="translate(786, 218)">
+    <text x="0" y="14" font-family="'JetBrains Mono', monospace" font-size="12" font-weight="500" fill="#6F7785">NEXT-WORD PROBABILITIES</text>
+
+    <!-- Row 1 -->
+    <text x="0" y="64" font-family="'JetBrains Mono', monospace" font-size="16" font-weight="600" fill="#F4F4F2">lazy</text>
+    <text x="326" y="64" text-anchor="end" font-family="'JetBrains Mono', monospace" font-size="15" font-weight="600" fill="#F4F4F2">68%</text>
+    <rect x="0" y="76" width="326" height="5" rx="2.5" fill="#1B1F27"/>
+    <rect x="0" y="76" width="222" height="5" rx="2.5" fill="#F4F4F2"/>
+
+    <!-- Row 2 -->
+    <text x="0" y="122" font-family="'JetBrains Mono', monospace" font-size="16" font-weight="500" fill="#9AA2AE">fence</text>
+    <text x="326" y="122" text-anchor="end" font-family="'JetBrains Mono', monospace" font-size="15" font-weight="500" fill="#9AA2AE">19%</text>
+    <rect x="0" y="134" width="326" height="5" rx="2.5" fill="#1B1F27"/>
+    <rect x="0" y="134" width="62" height="5" rx="2.5" fill="#7D8593"/>
+
+    <!-- Row 3 -->
+    <text x="0" y="180" font-family="'JetBrains Mono', monospace" font-size="16" font-weight="500" fill="#6F7785">stream</text>
+    <text x="326" y="180" text-anchor="end" font-family="'JetBrains Mono', monospace" font-size="15" font-weight="500" fill="#6F7785">9%</text>
+    <rect x="0" y="192" width="326" height="5" rx="2.5" fill="#1B1F27"/>
+    <rect x="0" y="192" width="30" height="5" rx="2.5" fill="#464D59"/>
+  </g>
+
+  <!-- Bottom Plain Hairline Footer Index -->
+  <line x1="88" y1="504" x2="1112" y2="504" stroke="#1E2229" stroke-width="1"/>
+  <text x="88" y="546" font-family="'JetBrains Mono', monospace" font-size="13.5" font-weight="500" fill="#7D8593">Tokenization  ·  Embeddings  ·  Self-Attention  ·  Sampling  ·  Perplexity</text>
+  <text x="1112" y="546" text-anchor="end" font-family="'JetBrains Mono', monospace" font-size="13.5" font-weight="500" fill="#5A616E">8 Interactive Steps</text>
+</svg>

@@ -99,7 +99,7 @@ class VectorSpace3D {
 
     this.scene = new THREE.Scene();
     const isLight = typeof document !== "undefined" && document.documentElement.getAttribute("data-theme") === "light";
-    const bgHex = isLight ? 0x181816 : 0x0E0E0C;
+    const bgHex = isLight ? 0x16181D : 0x0E1014;
     this.scene.background = new THREE.Color(bgHex);
     this.scene.fog = new THREE.FogExp2(bgHex, 0.015);
 
@@ -654,7 +654,7 @@ class VectorSpace3D {
   setTheme(theme) {
     if (!this.scene) return;
     const isLight = theme === "light";
-    const bgHex = isLight ? 0x181816 : 0x0E0E0C;
+    const bgHex = isLight ? 0x16181D : 0x0E1014;
     this.scene.background = new THREE.Color(bgHex);
     this.scene.fog = new THREE.FogExp2(bgHex, 0.015);
     this.requestRender();

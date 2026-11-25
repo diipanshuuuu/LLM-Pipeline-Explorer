@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 248 48" width="248" height="48" fill="none">
+  <g transform="translate(4, 6) scale(0.5625)">
+    <path d="M14 10V34C14 43.9411 22.0589 52 32 52C41.9411 52 50 43.9411 50 34V23" stroke="#F4F4F2" stroke-width="8.5" stroke-linecap="butt"/>
+    <rect x="45.75" y="10" width="8.5" height="7.5" fill="#F4F4F2"/>
+  </g>
+  <text x="48" y="33" font-family="'Bricolage Grotesque', -apple-system, BlinkMacSystemFont, sans-serif" font-size="28" font-weight="700" letter-spacing="-0.8" fill="#F4F4F2">Unprompted</text>
+</svg>

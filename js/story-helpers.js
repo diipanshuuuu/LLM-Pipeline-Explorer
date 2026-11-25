@@ -4,14 +4,14 @@
  */
 
 const WHEEL_SLICE_COLORS = [
-  "#F97316", // Signal Orange
-  "#10B981", // Emerald
-  "#EAB308", // Marigold Gold
-  "#0EA5E9", // Cerulean Sky
-  "#EF4444", // Coral Red
-  "#84CC16", // Bright Lime
-  "#D97706", // Warm Amber
-  "#78716C"  // Warm Stone (Other)
+  "#0F766E", // Botanical Teal
+  "#D95D24", // Warm Vermilion
+  "#D97706", // Ochre Amber
+  "#1D4ED8", // Editorial Cobalt
+  "#15803D", // Forest Emerald
+  "#BE123C", // Crimson Rose
+  "#0D9488", // Seafoam Teal
+  "#64748B"  // Neutral Slate (Other)
 ];
 
 /**
@@ -198,11 +198,38 @@ function computeCompressionStats(charCount, brickCount) {
   return { savedPct, brickWidthPct };
 }
 
+/**
+ * Normalizes the UI complexity mode ("beginner" default vs "deep" full engineering lab).
+ *
+ * @param {string} mode
+ * @returns {"beginner"|"deep"}
+ */
+function normalizeExperienceLevel(mode) {
+  return mode === "deep" ? "deep" : "beginner";
+}
+
+/**
+ * Converts a raw token probability into an intuitive plain-English label for beginners
+ * so people with zero LLM background aren't hit by scientific notation like "2.0e-4%".
+ *
+ * @param {number} prob
+ * @returns {string}
+ */
+function formatBeginnerProbLabel(prob) {
+  if (typeof prob !== "number" || !Number.isFinite(prob)) return "Start";
+  if (prob >= 0.12) return "Expected";
+  if (prob >= 0.02) return "Common";
+  if (prob >= 0.003) return "Unusual";
+  return "Surprise!";
+}
+
 if (typeof window !== "undefined") {
   window.computeActiveStageFromLayout = computeActiveStageFromLayout;
   window.buildPrizeWheelSlices = buildPrizeWheelSlices;
   window.computeSpotlightWindow = computeSpotlightWindow;
   window.computeCompressionStats = computeCompressionStats;
+  window.normalizeExperienceLevel = normalizeExperienceLevel;
+  window.formatBeginnerProbLabel = formatBeginnerProbLabel;
   window.WHEEL_SLICE_COLORS = WHEEL_SLICE_COLORS;
 }
 
@@ -211,6 +238,8 @@ if (typeof global !== "undefined") {
   global.buildPrizeWheelSlices = buildPrizeWheelSlices;
   global.computeSpotlightWindow = computeSpotlightWindow;
   global.computeCompressionStats = computeCompressionStats;
+  global.normalizeExperienceLevel = normalizeExperienceLevel;
+  global.formatBeginnerProbLabel = formatBeginnerProbLabel;
   global.WHEEL_SLICE_COLORS = WHEEL_SLICE_COLORS;
 }
 
@@ -220,6 +249,8 @@ if (typeof module !== "undefined" && module.exports) {
     buildPrizeWheelSlices,
     computeSpotlightWindow,
     computeCompressionStats,
+    normalizeExperienceLevel,
+    formatBeginnerProbLabel,
     WHEEL_SLICE_COLORS
   };
 }

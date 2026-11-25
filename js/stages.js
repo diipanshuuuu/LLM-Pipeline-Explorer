@@ -67,6 +67,10 @@ class PipelineStages {
     return this.app && this.app.theme === "light";
   }
 
+  isDeepLevel() {
+    return this.app && this.app.experienceLevel === "deep";
+  }
+
   selectToken(idx) {
     this.selectedTokenIndex = idx;
     this.app.markStageExplored(1);
@@ -117,15 +121,19 @@ class PipelineStages {
       <div class="stage-card">
         <div class="stage-header-compact stage-header-row">
           <div>
-            <div class="stage-kicker">01 &middot; Tokenization (Word Bricks)</div>
-            <h2 class="stage-title">Chop text into token IDs</h2>
+            <div class="stage-kicker">01 &middot; Tokenization</div>
+            <h2 class="stage-title">Break text into numbered word bricks</h2>
           </div>
-          <span class="stage-live-pill mono tabular-nums">${displayTokens.length} tokens</span>
+          <span class="stage-live-meta mono tabular-nums">${displayTokens.length} tokens</span>
         </div>
 
+        <p class="stage-beginner-note beginner-only">
+          Computers can&rsquo;t read words directly, so AI chops your sentence into reusable pieces (<strong>tokens</strong>) and gives each one a dictionary ID number. <span class="try-cue">Try this: tap any brick below.</span>
+        </p>
+
         <div class="stage-visual-container">
-          <div class="stage-toolbar-row">
-            <span class="section-label">Tap a token</span>
+          <div class="stage-toolbar-row deep-only">
+            <span class="section-label">Tokenizer method</span>
             <div class="segmented-group" role="group" aria-label="Tokenization method">
               <button type="button" class="seg-btn ${mode === "bpe" ? "is-active" : ""}" onclick="pipelineStages.setTokenizerMode('bpe')">BPE (${bpeTokens.length})</button>
               <button type="button" class="seg-btn ${mode === "word" ? "is-active" : ""}" onclick="pipelineStages.setTokenizerMode('word')">Word (${wordTokens.length})</button>
@@ -151,20 +159,20 @@ class PipelineStages {
             <!-- Visual Transformation Strip + Compression Gauge -->
             <div class="visual-bridge-strip">
               <div class="bridge-node">
-                <span class="bridge-label">Token</span>
+                <span class="bridge-label">Selected Word</span>
                 <span class="bridge-val mono">"${this.esc(activeToken.text)}"</span>
               </div>
               <span class="bridge-arrow" aria-hidden="true">&rarr;</span>
               <div class="bridge-node is-accent">
-                <span class="bridge-label">Token ID</span>
+                <span class="bridge-label">Dictionary ID</span>
                 <span class="bridge-val mono tabular-nums">#${activeToken.id}</span>
               </div>
-              <span class="bridge-arrow" aria-hidden="true">&rarr;</span>
-              <div class="bridge-node">
+              <span class="bridge-arrow deep-only" aria-hidden="true">&rarr;</span>
+              <div class="bridge-node deep-only">
                 <span class="bridge-label">UTF-8 Bytes</span>
                 <span class="bridge-val mono tabular-nums">${(activeToken.bytes || []).slice(0, 4).map(b => b.toString(16).toUpperCase().padStart(2, "0")).join(" ")}</span>
               </div>
-              <div class="compression-gauge">
+              <div class="compression-gauge deep-only">
                 <div class="compression-meta">
                   <span class="bridge-label">${charCount} chars &rarr; ${bpeCount} tokens</span>
                   <span class="mono tabular-nums compression-pct">-${comp.savedPct}%</span>
@@ -176,8 +184,8 @@ class PipelineStages {
             </div>
           </div>
 
-          <!-- Interactive BPE LEGO Glue Machine -->
-          <div class="inset-panel bpe-stepper-panel">
+          <!-- Interactive BPE LEGO Glue Machine (Deep Lab) -->
+          <div class="inset-panel bpe-stepper-panel deep-only">
             <div class="stage-toolbar-row">
               <div class="section-label">BPE Merge Lab (Byte-Pair Encoding)</div>
               <div class="inline-controls">
@@ -217,7 +225,7 @@ class PipelineStages {
           </div>
         </div>
 
-        <details class="stage-deep-dive">
+        <details class="stage-deep-dive deep-only">
           <summary class="deep-dive-summary">
             <span>Math Formula &middot; BPE</span>
             <span class="mono">+</span>
@@ -326,11 +334,15 @@ class PipelineStages {
       <div class="stage-card">
         <div class="stage-header-compact stage-header-row">
           <div>
-            <div class="stage-kicker">02 &middot; Embeddings (3D Meaning Map)</div>
-            <h2 class="stage-title">Map tokens to 3D vectors</h2>
+            <div class="stage-kicker">02 &middot; Embeddings</div>
+            <h2 class="stage-title">Place every word on a 3D meaning map</h2>
           </div>
-          <span class="stage-live-pill mono">Embeddings</span>
+          <span class="stage-live-meta mono">3D Meaning Map</span>
         </div>
+
+        <p class="stage-beginner-note beginner-only">
+          Words with similar meanings live in the same neighborhood, while opposites point away from each other. <span class="try-cue">Try this: drag the 3D map or compare &ldquo;quick vs fast&rdquo; and &ldquo;quick vs lazy&rdquo;.</span>
+        </p>
 
         <div class="stage-visual-container">
           <div class="stage2-split">
@@ -338,7 +350,7 @@ class PipelineStages {
             <div class="stage2-map-col">
               <div class="viewport-clean" id="threeViewportContainer" data-testid="three-viewport">
                 <div class="viewport-toolbar">
-                  <div class="viewport-toolbar-group">
+                  <div class="viewport-toolbar-group deep-only">
                     <button type="button" id="vpModeArrows" class="vp-btn ${this.vpMode === "arrows" ? "is-active" : ""}" onclick="pipelineStages.setViewportMode('arrows')">Vectors</button>
                     <button type="button" id="vpModePoints" class="vp-btn ${this.vpMode === "points" ? "is-active" : ""}" onclick="pipelineStages.setViewportMode('points')">Points</button>
                     <button type="button" id="vpAnchorsBtn" class="vp-btn ${this.vpAnchorsOn ? "is-active" : ""}" onclick="pipelineStages.toggleViewportAnchors()">Neighbors</button>
@@ -351,15 +363,15 @@ class PipelineStages {
                 <div id="vectorSpaceHUD" class="vector-hud-container hidden"></div>
               </div>
               <div class="viewport-help-bar">
-                <span class="kbd-chip">Drag</span>
-                <span class="kbd-chip">Zoom</span>
-                <span class="kbd-chip">Click 2 tokens</span>
+                <span class="kbd-chip">Drag to orbit</span>
+                <span class="kbd-chip">Scroll to zoom</span>
+                <span class="kbd-chip">Click 2 words</span>
               </div>
             </div>
 
-            <!-- Right: Visual Twin Compass & 4-Trait Visual Bars -->
+            <!-- Right: Visual Meaning Compass -->
             <div class="inset-panel similarity-panel" id="stage2Inspector">
-              <div class="section-label">Cosine Similarity Compass</div>
+              <div class="section-label">Meaning Compass (Cosine Similarity)</div>
 
               <div class="select-pair-row">
                 <select id="compareWordASelect" aria-label="First word to compare" class="clean-select" onchange="pipelineStages.setComparePair(this.value, pipelineStages.compareWordB)">
@@ -379,12 +391,12 @@ class PipelineStages {
               </div>
 
               <div id="stage2SimilarityReadout"></div>
-              <div id="stage2VectorDNA"></div>
+              <div id="stage2VectorDNA" class="deep-only"></div>
             </div>
           </div>
         </div>
 
-        <details class="stage-deep-dive">
+        <details class="stage-deep-dive deep-only">
           <summary class="deep-dive-summary">
             <span>Math Formula &middot; Cosine Similarity</span>
             <span class="mono">+</span>
@@ -524,10 +536,10 @@ class PipelineStages {
     const gx = cx + Math.cos(-rad) * r;
     const gy = cy + Math.sin(-rad) * r;
     const isLight = this.isLightTheme();
-    const colA = isLight ? "#EA580C" : "#FB923C";
-    const colB = isLight ? "#059669" : "#34D399";
-    const colCenter = isLight ? "#181816" : "#F5F4EE";
-    const colArc = isLight ? "#78766D" : "#A8A29E";
+    const colA = isLight ? "#0F766E" : "#2DD4BF";
+    const colB = isLight ? "#D95D24" : "#FB923C";
+    const colCenter = isLight ? "#141618" : "#F5F6F4";
+    const colArc = isLight ? "#6C737B" : "#868D98";
 
     const simEl = document.getElementById("stage2SimilarityReadout");
     if (simEl) {
@@ -612,10 +624,14 @@ class PipelineStages {
         <div class="stage-header-compact stage-header-row">
           <div>
             <div class="stage-kicker">03 &middot; Positional Encoding (RoPE)</div>
-            <h2 class="stage-title">Rotate vectors by position</h2>
+            <h2 class="stage-title">Stamp every word with its seat order</h2>
           </div>
-          <span id="stage3AnglePill" class="stage-live-pill mono tabular-nums">#${this.ropeSelectedPos + 1} &middot; ${this.ropeSelectedPos * 36}&deg;</span>
+          <span id="stage3AnglePill" class="stage-live-meta mono tabular-nums">Seat #${this.ropeSelectedPos + 1} &middot; ${this.ropeSelectedPos * 36}&deg;</span>
         </div>
+
+        <p class="stage-beginner-note beginner-only">
+          &ldquo;Dog chases fox&rdquo; and &ldquo;Fox chases dog&rdquo; use the exact same words&mdash;so AI spins a tiny clock hand on each word to remember where it sits. <span class="try-cue">Try this: hit Spin or click Swap.</span>
+        </p>
 
         <div class="stage-visual-container">
           <div class="stage-toolbar-row">
@@ -628,7 +644,7 @@ class PipelineStages {
               `).join("")}
             </div>
 
-            <div class="segmented-group" role="group" aria-label="Positional encoding method">
+            <div class="segmented-group deep-only" role="group" aria-label="Positional encoding method">
               <button type="button" class="seg-btn ${mode === "rope" ? "is-active" : ""}" onclick="pipelineStages.setRoPEMode('rope')">RoPE</button>
               <button type="button" class="seg-btn ${mode === "sinusoidal" ? "is-active" : ""}" onclick="pipelineStages.setRoPEMode('sinusoidal')">Sinusoidal</button>
               <button type="button" class="seg-btn ${mode === "none" ? "is-active" : ""}" onclick="pipelineStages.setRoPEMode('none')">None</button>
@@ -651,9 +667,9 @@ class PipelineStages {
               <div id="ropeExplainPanel"></div>
               <div class="order-action-row">
                 <button type="button" class="btn btn-sm btn-secondary" onclick="pipelineStages.toggleOrderSwap()">
-                  Swap &harr;
+                  Swap Order &harr;
                 </button>
-                <button type="button" class="btn btn-sm btn-primary" onclick="pipelineStages.applyRoPETo3D()">
+                <button type="button" class="btn btn-sm btn-primary deep-only" onclick="pipelineStages.applyRoPETo3D()">
                   ${this.ropeAppliedTo3D ? "3D Spin: ON &uarr;" : "Send to 3D &uarr;"}
                 </button>
               </div>
@@ -661,7 +677,7 @@ class PipelineStages {
           </div>
         </div>
 
-        <details class="stage-deep-dive">
+        <details class="stage-deep-dive deep-only">
           <summary class="deep-dive-summary">
             <span>Math Formula &middot; RoPE</span>
             <span class="mono">+</span>
@@ -812,9 +828,9 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
       const plotW = w - padX * 2;
       const plotH = h - padY * 2;
       const pe = MathEngine.sinusoidalPE(Math.max(8, tokens.length), 6);
-      const colors = ["#38BDF8", "#2DD4BF", "#FBBF24"];
+      const colors = ["#2DD4BF", "#FB923C", "#FBBF24"];
 
-      ctx.strokeStyle = "#263348";
+      ctx.strokeStyle = "#2E323A";
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(padX, padY + plotH / 2);
@@ -839,7 +855,7 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
       }
 
       const cursorX = padX + (activePos / Math.max(1, tokens.length - 1)) * plotW;
-      ctx.strokeStyle = "#F8FAFC";
+      ctx.strokeStyle = "#F5F6F4";
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
       ctx.moveTo(cursorX, padY);
@@ -856,7 +872,7 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
         ctx.fill();
       }
 
-      ctx.fillStyle = "#F1F5F9";
+      ctx.fillStyle = "#F5F6F4";
       ctx.font = "600 12px 'JetBrains Mono', monospace";
       ctx.fillText(`Seat #${activePos + 1}: "${tokens[activePos]?.text || ""}"`, Math.min(w - 170, Math.max(padX, cursorX - 36)), 18);
       return;
@@ -865,7 +881,7 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
     if (this.ropeMode === "none") {
       const cx = w / 2;
       const cy = h / 2;
-      ctx.strokeStyle = "#475569";
+      ctx.strokeStyle = "#4B525E";
       ctx.setLineDash([5, 5]);
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -878,15 +894,15 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
         const oy = cy + (Math.floor(i / 3) - 1) * 22;
         ctx.beginPath();
         ctx.arc(ox, oy, 7, 0, Math.PI * 2);
-        ctx.fillStyle = i === activePos ? "#F87171" : "#64748B";
+        ctx.fillStyle = i === activePos ? "#FB7185" : "#6C737B";
         ctx.fill();
-        ctx.fillStyle = "#F1F5F9";
+        ctx.fillStyle = "#F5F6F4";
         ctx.font = "11px 'JetBrains Mono', monospace";
         ctx.fillText(`"${t.text}"`, ox + 10, oy + 4);
       });
 
-      ctx.fillStyle = "#F87171";
-      ctx.font = "600 12px 'Plus Jakarta Sans', sans-serif";
+      ctx.fillStyle = "#FB7185";
+      ctx.font = "600 12px 'DM Sans', sans-serif";
       ctx.fillText("No seat clocks — every word floats in one pile!", 18, 22);
       return;
     }
@@ -898,13 +914,13 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
     // Outer & inner clock rings
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = "#3F3D36";
+    ctx.strokeStyle = "#363A43";
     ctx.lineWidth = 2;
     ctx.stroke();
 
     ctx.beginPath();
     ctx.arc(cx, cy, radius * 0.56, 0, Math.PI * 2);
-    ctx.strokeStyle = "#262520";
+    ctx.strokeStyle = "#24272E";
     ctx.lineWidth = 1;
     ctx.stroke();
 
@@ -915,12 +931,12 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
       ctx.moveTo(cx, cy);
       ctx.arc(cx, cy, radius * 0.56, -Math.PI / 2, activePos * stepRad - Math.PI / 2);
       ctx.closePath();
-      ctx.fillStyle = "rgba(249, 115, 22, 0.18)";
+      ctx.fillStyle = "rgba(45, 212, 191, 0.16)";
       ctx.fill();
     }
 
     // 12 o'clock reference
-    ctx.strokeStyle = "rgba(168, 162, 158, 0.28)";
+    ctx.strokeStyle = "rgba(185, 191, 199, 0.25)";
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.moveTo(cx, cy);
@@ -937,18 +953,18 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(x, y);
-      ctx.strokeStyle = isSelected ? "#FB923C" : "rgba(168, 162, 158, 0.32)";
+      ctx.strokeStyle = isSelected ? "#2DD4BF" : "rgba(185, 191, 199, 0.28)";
       ctx.lineWidth = isSelected ? 3.5 : 1.3;
       ctx.stroke();
 
       ctx.beginPath();
       ctx.arc(x, y, isSelected ? 7.5 : 4.2, 0, Math.PI * 2);
-      ctx.fillStyle = isSelected ? "#34D399" : "#78716C";
+      ctx.fillStyle = isSelected ? "#FB923C" : "#6C737B";
       ctx.fill();
 
       const lx = cx + (radius + 18) * Math.cos(angle);
       const ly = cy + (radius + 18) * Math.sin(angle);
-      ctx.fillStyle = isSelected ? "#FFFFFF" : "#A8A29E";
+      ctx.fillStyle = isSelected ? "#F5F6F4" : "#9AA2AE";
       ctx.font = isSelected ? "bold 12px 'JetBrains Mono', monospace" : "11px 'JetBrains Mono', monospace";
       ctx.textAlign = Math.cos(angle) > 0.2 ? "left" : Math.cos(angle) < -0.2 ? "right" : "center";
       ctx.textBaseline = "middle";
@@ -958,7 +974,7 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
     // Center hub
     ctx.beginPath();
     ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
-    ctx.fillStyle = "#F5F4EE";
+    ctx.fillStyle = "#F5F6F4";
     ctx.fill();
 
     ctx.textAlign = "left";
@@ -1002,34 +1018,39 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
 
     const topClue = attendedTokens.find(x => x.index !== selectedIdx) || attendedTokens[0];
 
-    const stackedColors = ["#F97316", "#10B981", "#EAB308", "#0EA5E9", "#EF4444", "#84CC16"];
+    const stackedColors = ["#0F766E", "#D95D24", "#D97706", "#1D4ED8", "#15803D", "#BE123C"];
 
     container.innerHTML = `
       <div class="stage-card">
         <div class="stage-header-compact stage-header-row">
           <div>
-            <div class="stage-kicker">04 &middot; Self-Attention (Word Detective)</div>
-            <h2 class="stage-title">Weight clues from past tokens</h2>
+            <div class="stage-kicker">04 &middot; Self-Attention</div>
+            <h2 class="stage-title">Connect clues from earlier words</h2>
           </div>
-          <span class="stage-live-pill mono">${topClue ? `"${this.esc(topClue.token)}" ${Math.round(topClue.weight * 100)}%` : "Self"}</span>
+          <span class="stage-live-meta mono">${topClue ? `Top clue: "${this.esc(topClue.token)}" (${Math.round(topClue.weight * 100)}%)` : "Self"}</span>
         </div>
+
+        <p class="stage-beginner-note beginner-only">
+          Words change meaning based on context. <strong>Self-Attention</strong> lets each word look back at earlier words and borrow clues from the ones that matter most. <span class="try-cue">Try this: tap different words or hit Auto-Scan.</span>
+        </p>
 
         <div class="stage-visual-container">
           <div class="stage-toolbar-row">
-            <div class="segmented-group" role="group" aria-label="Attention head">
+            <div class="segmented-group deep-only" role="group" aria-label="Attention head">
               <button type="button" class="seg-btn ${this.selectedHeadIndex === 0 ? "is-active" : ""}" onclick="pipelineStages.setAttnHead(0)">Head 1 · Syntax</button>
               <button type="button" class="seg-btn ${this.selectedHeadIndex === 1 ? "is-active" : ""}" onclick="pipelineStages.setAttnHead(1)">Head 2 · Semantics</button>
             </div>
+            <span class="section-label beginner-only">Tap any word to see what clues it looks back at</span>
 
             <div class="inline-controls">
               <button type="button" class="btn btn-sm btn-primary" onclick="pipelineStages.toggleAttnTour()">
                 ${this._attnTourTimer ? "Stop" : "Auto-Scan"}
               </button>
-              <div class="segmented-group" role="group" aria-label="Attention view mode">
+              <div class="segmented-group deep-only" role="group" aria-label="Attention view mode">
                 <button type="button" class="seg-btn ${this.attnViewMode === "arcs" ? "is-active" : ""}" onclick="pipelineStages.setAttnViewMode('arcs')">Arcs</button>
                 <button type="button" class="seg-btn ${this.attnViewMode === "matrix" ? "is-active" : ""}" onclick="pipelineStages.setAttnViewMode('matrix')">Matrix</button>
               </div>
-              <button type="button" class="btn btn-sm ${this.causalMaskEnabled ? "btn-teal" : ""}" onclick="pipelineStages.toggleCausalMask()">
+              <button type="button" class="btn btn-sm deep-only ${this.causalMaskEnabled ? "btn-teal" : ""}" onclick="pipelineStages.toggleCausalMask()">
                 ${this.causalMaskEnabled ? "Causal Mask: ON" : "Causal Mask: OFF"}
               </button>
             </div>
@@ -1038,9 +1059,9 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
           ${this.attnViewMode === "arcs" ? `
             <div class="detective-board" id="attnStageArea">
               <div class="detective-legend">
-                <span class="legend-chip"><span class="quick-dot is-orange"></span>Query (Q): "${this.esc(currentToken.text)}"</span>
-                <span class="legend-chip"><span class="quick-dot is-teal"></span>Keys (K)</span>
-                ${this.causalMaskEnabled && selectedIdx < tokens.length - 1 ? `<span class="legend-chip">⊘ Future masked</span>` : ""}
+                <span class="legend-chip"><span class="quick-dot is-orange"></span><span class="beginner-only">Active word:</span><span class="deep-only">Query (Q):</span> "${this.esc(currentToken.text)}"</span>
+                <span class="legend-chip"><span class="quick-dot is-teal"></span><span class="beginner-only">Clue words</span><span class="deep-only">Keys (K)</span></span>
+                ${this.causalMaskEnabled && selectedIdx < tokens.length - 1 ? `<span class="legend-chip">⊘ <span class="beginner-only">Hidden future words</span><span class="deep-only">Future masked</span></span>` : ""}
               </div>
               <div class="sentence-ribbon" id="attnTokenRibbon">
                 ${tokens.map((t, idx) => {
@@ -1083,7 +1104,7 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
                         const bgAlpha = Math.max(0.08, val * 0.85);
                         return blocked
                           ? `<td class="attn-matrix-cell is-blocked">&mdash;</td>`
-                          : `<td class="attn-matrix-cell tabular-nums" onclick="pipelineStages.selectToken(${i})" style="background:rgba(249, 115, 22, ${bgAlpha.toFixed(2)}); color:${val > 0.42 ? "#FFFFFF" : "var(--ink-primary)"};">${pct}%</td>`;
+                          : `<td class="attn-matrix-cell tabular-nums" onclick="pipelineStages.selectToken(${i})" style="background:rgba(15, 118, 110, ${bgAlpha.toFixed(2)}); color:${val > 0.42 ? "#FFFFFF" : "var(--ink-primary)"};">${pct}%</td>`;
                       }).join("")}
                     </tr>
                   `).join("")}
@@ -1116,7 +1137,7 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
           </div>
         </div>
 
-        <details class="stage-deep-dive">
+        <details class="stage-deep-dive deep-only">
           <summary class="deep-dive-summary">
             <span>Math Formula &middot; Self-Attention</span>
             <span class="mono">+</span>
@@ -1156,8 +1177,8 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
     const srcRect = srcBtn.getBoundingClientRect();
     const x1 = srcRect.left - svgRect.left + srcRect.width / 2;
     const isLight = this.isLightTheme();
-    const selfStroke = isLight ? "#EA580C" : "#FB923C";
-    const clueStroke = isLight ? "#059669" : "#34D399";
+    const selfStroke = isLight ? "#0F766E" : "#2DD4BF";
+    const clueStroke = isLight ? "#D95D24" : "#FB923C";
 
     const paths = [];
     buttons.forEach((btn, j) => {
@@ -1242,25 +1263,29 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
         <div class="stage-header-compact stage-header-row">
           <div>
             <div class="stage-kicker">05 &middot; Transformer Block</div>
-            <h2 class="stage-title">Norm &middot; Residual &middot; Feed-Forward</h2>
+            <h2 class="stage-title">Balance, remember, and recall facts</h2>
           </div>
-          <span class="stage-live-pill mono">"${this.esc(activeTok.text)}"</span>
+          <span class="stage-live-meta mono">Word: "${this.esc(activeTok.text)}"</span>
         </div>
+
+        <p class="stage-beginner-note beginner-only">
+          Inside every thinking layer, AI performs 3 quick jobs: tame loud signals (<strong>RMSNorm</strong>), keep a memory shortcut (<strong>Residual</strong>), and light up matching facts (<strong>FFN</strong>). <span class="try-cue">Try this: hit Blast! or switch tabs.</span>
+        </p>
 
         <div class="stage-visual-container">
           <!-- Interactive 3-Station Visual Selector -->
           <div class="block-stepper" role="tablist" aria-label="Transformer block sub-layers">
             <button type="button" role="tab" aria-selected="${activeTab === "norm"}" class="block-step-btn ${activeTab === "norm" ? "is-active" : ""}" onclick="pipelineStages.setStage5Tab('norm')">
-              <span class="block-step-kicker">01 · Normalization</span>
-              <span class="block-step-title">RMSNorm Limiter</span>
+              <span class="block-step-kicker">01 · RMSNorm</span>
+              <span class="block-step-title">Balance Volume</span>
             </button>
             <button type="button" role="tab" aria-selected="${activeTab === "skip"}" class="block-step-btn ${activeTab === "skip" ? "is-active" : ""}" onclick="pipelineStages.setStage5Tab('skip')">
               <span class="block-step-kicker">02 · Residual Skip</span>
-              <span class="block-step-title">Bypass Highway</span>
+              <span class="block-step-title">Memory Shortcut</span>
             </button>
             <button type="button" role="tab" aria-selected="${activeTab === "ffn"}" class="block-step-btn ${activeTab === "ffn" ? "is-active" : ""}" onclick="pipelineStages.setStage5Tab('ffn')">
               <span class="block-step-kicker">03 · Feed-Forward (FFN)</span>
-              <span class="block-step-title">Memory Neurons</span>
+              <span class="block-step-title">Fact Recall</span>
             </button>
           </div>
 
@@ -1268,23 +1293,23 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
             <div class="inset-panel">
               <div class="stage-toolbar-row" style="margin-bottom:12px;">
                 <span class="section-label">Tap any bar to spike &middot; <span id="spikeBarTag" class="mono">d${this.spikeBarIndex}</span></span>
-                <div class="segmented-group" role="group" aria-label="Normalization method">
+                <div class="segmented-group deep-only" role="group" aria-label="Normalization method">
                   <button type="button" class="seg-btn ${this.normType === "rmsnorm" ? "is-active" : ""}" onclick="pipelineStages.setNormType('rmsnorm')">RMSNorm</button>
                   <button type="button" class="seg-btn ${this.normType === "layernorm" ? "is-active" : ""}" onclick="pipelineStages.setNormType('layernorm')">LayerNorm</button>
                 </div>
               </div>
 
               <div class="spike-control-row">
-                <label for="normSpikeSlider">Spike:</label>
+                <label for="normSpikeSlider">Signal Spike:</label>
                 <input id="normSpikeSlider" type="range" min="-5.0" max="5.0" step="0.5" value="${this.normSpikeValue}" oninput="pipelineStages.setNormSpike(this.value)">
                 <span id="normSpikeReadout" class="mono tabular-nums spike-val">+${this.normSpikeValue.toFixed(1)}</span>
                 <button type="button" class="btn btn-sm btn-secondary" onclick="pipelineStages.blastRandomSpike()">Blast!</button>
-                <span id="normRmsReadout" class="mono tabular-nums spike-rms"></span>
+                <span id="normRmsReadout" class="mono tabular-nums spike-rms deep-only"></span>
               </div>
 
               <div class="norm-compare-grid">
                 <div class="bar-chart-card">
-                  <div class="eq-title is-danger">Before &middot; Raw</div>
+                  <div class="eq-title is-danger">Before &middot; Spiked</div>
                   <div id="normBeforeChart" class="eq-bars-stage"></div>
                 </div>
                 <div class="bar-chart-card">
@@ -1298,7 +1323,7 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
               <div class="skip-diagram-row">
                 <span class="section-label">Residual Connection &middot; <span class="mono">"${this.esc(activeTok.text)}"</span></span>
                 <button type="button" class="btn btn-sm ${this.skipConnectionEnabled ? "btn-teal" : "btn-danger"}" onclick="pipelineStages.toggleSkip()">
-                  ${this.skipConnectionEnabled ? "Residual: ON" : "Residual: CUT"}
+                  ${this.skipConnectionEnabled ? "Shortcut: ON" : "Shortcut: CUT"}
                 </button>
               </div>
 
@@ -1331,7 +1356,7 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
 
                   <rect x="16" y="82" width="110" height="52" rx="10" fill="var(--bg-surface)" stroke="var(--accent-primary)" stroke-width="2"/>
                   <text x="71" y="104" text-anchor="middle" font-size="11" fill="var(--ink-muted)">Input x</text>
-                  <text x="71" y="122" text-anchor="middle" font-size="13" font-weight="700" font-family="JetBrains Mono" fill="var(--ink-primary)">"${this.esc(activeTok.text.slice(0, 9))}"</text>
+                  <text x="71" y="122" text-anchor="middle" font-size="13" font-weight="700" font-family="IBM Plex Mono" fill="var(--ink-primary)">"${this.esc(activeTok.text.slice(0, 9))}"</text>
 
                   <rect x="218" y="80" width="164" height="56" rx="10" fill="var(--bg-surface)" stroke="var(--border-strong)" stroke-width="2"/>
                   <text x="300" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink-primary)">Sublayer(x)</text>
@@ -1342,7 +1367,7 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
 
                   <rect x="534" y="82" width="74" height="52" rx="10" fill="var(--bg-surface)" stroke="${this.skipConnectionEnabled ? "var(--teal)" : "var(--rose)"}" stroke-width="2" opacity="${this.skipConnectionEnabled ? "1" : "0.55"}"/>
                   <text x="571" y="104" text-anchor="middle" font-size="11" fill="var(--ink-muted)">Out</text>
-                  <text x="571" y="122" text-anchor="middle" font-size="13" font-weight="700" font-family="JetBrains Mono" fill="${this.skipConnectionEnabled ? "var(--teal)" : "var(--rose)"}">${this.skipConnectionEnabled ? "100%" : "28%"}</text>
+                  <text x="571" y="122" text-anchor="middle" font-size="13" font-weight="700" font-family="IBM Plex Mono" fill="${this.skipConnectionEnabled ? "var(--teal)" : "var(--rose)"}">${this.skipConnectionEnabled ? "100%" : "28%"}</text>
                 </svg>
               </div>
               <div id="skipStatusText" class="signal-health-bar"></div>
@@ -1351,7 +1376,7 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
             <div class="inset-panel">
               <div class="stage-toolbar-row" style="margin-bottom:12px;">
                 <div class="section-label">Feed-Forward Neurons (FFN) &middot; <span class="mono">"${this.esc(activeTok.text)}"</span></div>
-                <div class="segmented-group" role="group" aria-label="FFN activation architecture">
+                <div class="segmented-group deep-only" role="group" aria-label="FFN activation architecture">
                   <button type="button" class="seg-btn ${this.ffnArch === "swiglu" ? "is-active" : ""}" onclick="pipelineStages.setFFNArch('swiglu')">SwiGLU</button>
                   <button type="button" class="seg-btn ${this.ffnArch === "gelu" ? "is-active" : ""}" onclick="pipelineStages.setFFNArch('gelu')">GELU</button>
                 </div>
@@ -1362,7 +1387,7 @@ x'_(2i+1) = x_2i sin(m&theta;) + x_(2i+1) cos(m&theta;)</pre>
           `}
         </div>
 
-        <details class="stage-deep-dive">
+        <details class="stage-deep-dive deep-only">
           <summary class="deep-dive-summary">
             <span>Math Formula &middot; RMSNorm / Residual / SwiGLU</span>
             <span class="mono">+</span>
@@ -1552,11 +1577,15 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
       <div class="stage-card">
         <div class="stage-header-compact stage-header-row">
           <div>
-            <div class="stage-kicker">06 &middot; Layer Stack &amp; Logits (12 Floors)</div>
-            <h2 class="stage-title">Refine logits across 12 layers</h2>
+            <div class="stage-kicker">06 &middot; Layer Stack &amp; Logits</div>
+            <h2 class="stage-title">Sharpen the best guess across 12 floors</h2>
           </div>
-          <span id="layerReadout" class="stage-live-pill mono tabular-nums">Layer ${this.selectedLayer} / 12</span>
+          <span id="layerReadout" class="stage-live-meta mono tabular-nums">Layer ${this.selectedLayer} / 12</span>
         </div>
+
+        <p class="stage-beginner-note beginner-only">
+          AI stacks 12 thinking floors in a row. Early floors only catch rough grammar, while top floors produce sharp word scores (<strong>logits</strong>). <span class="try-cue">Try this: click Run L1 &rarr; L12.</span>
+        </p>
 
         <div class="stage-visual-container">
           <div class="stage-toolbar-row">
@@ -1565,9 +1594,9 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
               <button type="button" class="btn btn-sm btn-primary" onclick="pipelineStages.rideElevatorAnimation()">
                 ${this._elevatorTimer ? "Stop" : "Run L1 → L12"}
               </button>
-              <button type="button" class="preset-btn" onclick="pipelineStages.setSelectedLayer(1)">L1</button>
-              <button type="button" class="preset-btn" onclick="pipelineStages.setSelectedLayer(6)">L6</button>
-              <button type="button" class="preset-btn" onclick="pipelineStages.setSelectedLayer(12)">L12</button>
+              <button type="button" class="preset-btn deep-only" onclick="pipelineStages.setSelectedLayer(1)">L1</button>
+              <button type="button" class="preset-btn deep-only" onclick="pipelineStages.setSelectedLayer(6)">L6</button>
+              <button type="button" class="preset-btn deep-only" onclick="pipelineStages.setSelectedLayer(12)">L12</button>
             </div>
           </div>
 
@@ -1599,7 +1628,7 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
             <!-- Right: Visual Next-Word Race -->
             <div class="inset-panel race-panel">
               <div class="race-header-row">
-                <span class="section-label">Top 6 Logits</span>
+                <span class="section-label">Top 6 Word Scores (Logits)</span>
                 <span id="layerZoneBadge" class="race-zone-tag"></span>
               </div>
               <div id="layerRoleReadout" class="clarity-meter-box"></div>
@@ -1608,7 +1637,7 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
           </div>
         </div>
 
-        <details class="stage-deep-dive">
+        <details class="stage-deep-dive deep-only">
           <summary class="deep-dive-summary">
             <span>Math Formula &middot; Stacked Layers &amp; Logits</span>
             <span class="mono">+</span>
@@ -1713,7 +1742,7 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
               <span class="mono tabular-nums race-rank">#${idx + 1}</span>
               <span class="mono race-word">"${this.esc(c.token)}"</span>
               <span class="race-cluster">${this.esc(c.cluster)}</span>
-              <span class="mono tabular-nums race-score">${c.rawLogit.toFixed(2)}</span>
+              <span class="mono tabular-nums race-score deep-only">${c.rawLogit.toFixed(2)}</span>
             </span>
             <span class="race-track">
               <span class="race-bar" style="display:block; width:${barPct}%; background:${idx === 0 ? "var(--teal)" : "var(--accent-primary)"};"></span>
@@ -1735,15 +1764,19 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
       <div class="stage-card">
         <div class="stage-header-compact stage-header-row">
           <div>
-            <div class="stage-kicker">07 &middot; Softmax &amp; Sampling (Prize Wheel)</div>
-            <h2 class="stage-title">Spin probabilities for next token</h2>
+            <div class="stage-kicker">07 &middot; Softmax &amp; Sampling</div>
+            <h2 class="stage-title">Spin the wheel to pick the next word</h2>
           </div>
           ${lastMeta ? `
-            <span id="stage7LastPickedBanner" class="stage-live-pill is-teal mono">
-              + "${this.esc(lastMeta.word)}"${lastMeta.probPct ? ` · ${lastMeta.probPct}%` : ""}
+            <span id="stage7LastPickedBanner" class="stage-live-meta is-teal mono">
+              Added "${this.esc(lastMeta.word)}"${lastMeta.probPct ? ` · ${lastMeta.probPct}%` : ""}
             </span>
-          ` : `<span class="stage-live-pill mono">Softmax Wheel</span>`}
+          ` : `<span class="stage-live-meta mono">Softmax Wheel</span>`}
         </div>
+
+        <p class="stage-beginner-note beginner-only">
+          <strong>Softmax</strong> converts word scores into wheel slices&mdash;likely words get bigger slices. Raising <strong>Temperature</strong> makes AI more adventurous; lowering it plays it safe. <span class="try-cue">Try this: spin the wheel or click Safe / Wild.</span>
+        </p>
 
         <div class="stage-visual-container">
           <!-- Live Fill-in-the-blank Sentence -->
@@ -1759,7 +1792,7 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
               </div>
               <div class="wheel-cta-row">
                 <button type="button" id="rollSampleBtn" class="btn btn-primary" onclick="pipelineStages.spinWheelAndAppend()">
-                  ${this.isWheelSpinning ? "Spinning..." : "Sample Token"}
+                  ${this.isWheelSpinning ? "Spinning..." : "Spin & Add Word"}
                 </button>
                 <button type="button" class="btn btn-secondary" onclick="app.toggleAutoPlay()">
                   ${this.app.isAutoPlaying ? "Pause" : "Auto-Write"}
@@ -1769,7 +1802,7 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
 
             <div class="inset-panel wheel-slices-panel">
               <div class="stage-toolbar-row" style="margin-bottom:10px;">
-                <span class="section-label">Softmax Probabilities (tap to add)</span>
+                <span class="section-label">Next-Word Chances (tap any word to add)</span>
                 <span id="activeSurvivorCount" class="mono tabular-nums" style="font-size:12px; color:var(--teal); font-weight:600;"></span>
               </div>
               <div id="candBarsContainer" class="cand-bars-container"></div>
@@ -1779,7 +1812,7 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
           <!-- Sampling Controls -->
           <div class="inset-panel">
             <div class="stage-toolbar-row" style="margin-bottom:12px;">
-              <span class="section-label">Sampling Controls</span>
+              <span class="section-label">Creativity &amp; Sampling Controls</span>
               <div class="presets-list">
                 <button type="button" class="preset-btn" onclick="pipelineStages.applySamplingPreset(0.15, 3, 0.7)">Safe</button>
                 <button type="button" class="preset-btn" onclick="pipelineStages.applySamplingPreset(0.8, 10, 0.9)">Balanced</button>
@@ -1790,14 +1823,14 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
             <div class="sampling-sliders-grid">
               <div class="slider-block">
                 <div class="slider-head">
-                  <label for="tempSlider">Temperature</label>
+                  <label for="tempSlider">Temperature <span class="beginner-only">(Creativity)</span></label>
                   <span id="tempReadout" class="mono tabular-nums">${hp.temperature.toFixed(2)}</span>
                 </div>
                 <input id="tempSlider" type="range" min="0.00" max="1.50" step="0.05" value="${hp.temperature}" oninput="pipelineStages.updateSamplingSlider('temperature', this.value)">
                 <div id="tempHint" class="slider-hint"></div>
               </div>
 
-              <div class="slider-block">
+              <div class="slider-block deep-only">
                 <div class="slider-head">
                   <label for="topKSlider">Top-K</label>
                   <span id="topKReadout" class="mono tabular-nums">${hp.top_k}</span>
@@ -1806,7 +1839,7 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
                 <div class="slider-hint">Keep top K tokens</div>
               </div>
 
-              <div class="slider-block">
+              <div class="slider-block deep-only">
                 <div class="slider-head">
                   <label for="topPSlider">Top-P (Nucleus)</label>
                   <span id="topPReadout" class="mono tabular-nums">${Math.round(hp.top_p * 100)}%</span>
@@ -1823,7 +1856,7 @@ SwiGLU(x)  = (silu(x &middot; W_gate) &odot; (x &middot; W_up)) &middot; W_down<
           </div>
         </div>
 
-        <details class="stage-deep-dive">
+        <details class="stage-deep-dive deep-only">
           <summary class="deep-dive-summary">
             <span>Math Formula &middot; Softmax / Top-K / Top-P</span>
             <span class="mono">+</span>

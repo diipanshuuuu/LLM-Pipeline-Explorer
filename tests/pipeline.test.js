@@ -250,6 +250,91 @@ test('Compression stats compute bounded visual savings for token gauge', () => {
   assert.equal(clamped.brickWidthPct, 100);
 });
 
+test('Perplexity math computes exact log-softmax, sequence PPL, branching factor, and token swap', () => {
+  const {
+    PERPLEXITY_BANDS,
+    computeLogSoftmaxAtPosition,
+    computeSequencePerplexity,
+    simulateBranchingPerplexity,
+    replaceDecodedToken
+  } = require('../js/perplexity-math.js');
 
+  // Uniform logits across 4 vocab tokens => P = 0.25, surprisal = 2 bits, token PPL = 4
+  const uniform = new Float32Array([10, 10, 10, 10]);
+  const resUniform = computeLogSoftmaxAtPosition(uniform, 0, 4, 2, 3);
+  assert.ok(Math.abs(resUniform.prob - 0.25) < 1e-6);
+  assert.ok(Math.abs(resUniform.surprisalBits - 2.0) < 1e-5);
+  assert.ok(Math.abs(resUniform.tokenPerplexity - 4.0) < 1e-5);
+  assert.equal(resUniform.topAlternatives.length, 3);
 
+  // Peaked logits => highest logit is rank #1
+  const peaked = new Float32Array([1.0, 5.0, 2.0, -3.0]);
+  const resPeak = computeLogSoftmaxAtPosition(peaked, 0, 4, 1, 2);
+  assert.equal(resPeak.rank, 1);
+  assert.equal(resPeak.topAlternatives[0].id, 1);
+  assert.equal(resPeak.topAlternatives[1].id, 2);
 
+  // Sequence perplexity equals geometric mean of 1/P
+  const seq = computeSequencePerplexity([
+    { isContext: true },
+    { isContext: false, logProb: Math.log(0.5) },
+    { isContext: false, logProb: Math.log(0.125) }
+  ]);
+  // sqrt(2 * 8) = 4.0
+  assert.equal(seq.scoredCount, 2);
+  assert.ok(Math.abs(seq.perplexity - 4.0) < 1e-5);
+  assert.equal(seq.mostSurprisingIndex, 2);
+  assert.equal(seq.leastSurprisingIndex, 1);
+
+  // Branching factor simulator: P = 0.2 => PPL = 5.0
+  const sim = simulateBranchingPerplexity(0.2);
+  assert.ok(Math.abs(sim.perplexity - 5.0) < 1e-6);
+  assert.equal(sim.equivalentChoices, 5);
+
+  // Replace decoded token cleanly
+  const swapped = replaceDecodedToken(
+    [{ text: 'The' }, { text: ' quick' }, { text: ' toaster' }],
+    2,
+    ' fox'
+  );
+  assert.equal(swapped, 'The quick fox');
+
+  // Zero-purple invariant on perplexity bands
+  for (const band of PERPLEXITY_BANDS) {
+    assert.ok(!/8B5CF6|A78BFA|7C3AED|EC4899|F472B6/i.test(band.color));
+  }
+});
+
+test('DistilGPT-2 service scores predictable English lower perplexity than gibberish', async () => {
+  const { evaluatePerplexity } = require('../lib/distilgpt2-service.js');
+
+  const predictable = await evaluatePerplexity('I went to the store to buy some milk and bread.');
+  const chaotic = await evaluatePerplexity('Banana gravity elbow silently algebra trombone seven.');
+
+  assert.ok(predictable.scoredCount >= 8);
+  assert.ok(chaotic.scoredCount >= 5);
+  assert.ok(
+    predictable.perplexity < 80,
+    `Expected natural English PPL (${predictable.perplexity}) to be < 80 with BOS calibration`
+  );
+  assert.ok(
+    predictable.perplexity * 10 < chaotic.perplexity,
+    `Expected predictable PPL (${predictable.perplexity}) << chaotic PPL (${chaotic.perplexity})`
+  );
+  assert.equal(predictable.tokens[0].fromBos, true);
+  assert.equal(predictable.tokens[1].topAlternatives.length, 5);
+});
+
+test('Experience level defaults to beginner and formats intuitive probability labels', () => {
+  const { normalizeExperienceLevel, formatBeginnerProbLabel } = require('../js/story-helpers.js');
+
+  assert.equal(normalizeExperienceLevel(undefined), 'beginner');
+  assert.equal(normalizeExperienceLevel('beginner'), 'beginner');
+  assert.equal(normalizeExperienceLevel('deep'), 'deep');
+  assert.equal(normalizeExperienceLevel('invalid'), 'beginner');
+
+  assert.equal(formatBeginnerProbLabel(0.45), 'Expected');
+  assert.equal(formatBeginnerProbLabel(0.05), 'Common');
+  assert.equal(formatBeginnerProbLabel(0.006), 'Unusual');
+  assert.equal(formatBeginnerProbLabel(0.00002), 'Surprise!');
+});

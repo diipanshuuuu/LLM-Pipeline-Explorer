@@ -1,14 +1,10 @@
-# Cortext — How AI Thinks, Step by Step
+# Unprompted — Inside How AI Predicts Every Word
 
-![Cortext Preview](og-image.png)
-
-An interactive, real-time 3D web application visually and mathematically explaining every stage and parameter of a modern **Decoder-only Transformer Large Language Model (LLM)**.
-
-Built with vanilla JavaScript, modern CSS design tokens, and Three.js for 3D vector space visualization (100% offline, zero external CDN dependencies).
+An interactive, beginner-friendly 3D field guide opening the black box of modern **Large Language Models (LLMs)**—showing how sentences become numbered tokens, 3D meaning maps, self-attention clues, next-word probabilities, and live **DistilGPT-2 Perplexity**.
 
 ---
 
-## 🌟 The 7 Guided Pipeline Stages
+## The 8 Guided Pipeline Stages
 
 1. **Stage 1: Breaking Text into Pieces (Tokenization)**
    * Real-time Byte-Pair Encoding (BPE) sub-word tokenizer with UTF-8 byte breakdown (`[0x54, 0x68, 0x65]`), token IDs, and vocabulary lookups.

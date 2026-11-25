@@ -5,7 +5,8 @@
  */
 
 const DEFAULT_PROMPT = "The quick brown fox jumps over the";
-const THEME_STORAGE_KEY = "cortext-theme";
+const THEME_STORAGE_KEY = "unprompted-theme";
+const LEVEL_STORAGE_KEY = "unprompted-level";
 
 class App {
   constructor() {
@@ -15,6 +16,7 @@ class App {
     this.tokens = [];
     this.activeStage = 1;
     this.theme = "dark";
+    this.experienceLevel = "beginner";
     this.isAutoPlaying = false;
     this.autoPlayInterval = null;
     this.lastSampledWord = null;
@@ -47,17 +49,21 @@ class App {
       { id: 4, title: "Self-Attention", sub: "Clue Detective" },
       { id: 5, title: "Transformer Block", sub: "Norm · Skip · FFN" },
       { id: 6, title: "Layers & Logits", sub: "12 Thinking Floors" },
-      { id: 7, title: "Sampling", sub: "Softmax Wheel" }
+      { id: 7, title: "Sampling", sub: "Softmax Wheel" },
+      { id: 8, title: "Perplexity", sub: "DistilGPT-2 Lab" }
     ];
 
     this.stagesRenderer = new PipelineStages(this);
     window.pipelineStages = this.stagesRenderer;
+    this.perplexityExplorer = typeof PerplexityExplorer !== "undefined" ? new PerplexityExplorer(this) : null;
+    window.perplexityExplorer = this.perplexityExplorer;
 
     this.init();
   }
 
   init() {
     this.initTheme();
+    this.initExperienceLevel();
     this.bindEvents();
     this.updateTokens();
     // Default spotlight to the last word so Detective clue strings are rich immediately
@@ -94,6 +100,60 @@ class App {
       initial = "dark";
     }
     this.applyTheme(initial, false);
+  }
+
+  initExperienceLevel() {
+    let initial = "beginner";
+    try {
+      const saved = localStorage.getItem(LEVEL_STORAGE_KEY);
+      initial = typeof normalizeExperienceLevel === "function"
+        ? normalizeExperienceLevel(saved)
+        : (saved === "deep" ? "deep" : "beginner");
+    } catch (e) {
+      initial = "beginner";
+    }
+    this.applyExperienceLevel(initial, false);
+  }
+
+  setExperienceLevel(level) {
+    const normalized = typeof normalizeExperienceLevel === "function"
+      ? normalizeExperienceLevel(level)
+      : (level === "deep" ? "deep" : "beginner");
+    this.applyExperienceLevel(normalized, true);
+    this.showMicroToast(
+      normalized === "deep" ? "Deep Lab mode: full controls & math unlocked" : "Beginner mode: clean guided view",
+      normalized === "deep" ? "accent" : "teal"
+    );
+  }
+
+  applyExperienceLevel(level, persist = true) {
+    this.experienceLevel = level;
+    document.documentElement.setAttribute("data-level", level);
+
+    if (persist) {
+      try {
+        localStorage.setItem(LEVEL_STORAGE_KEY, level);
+      } catch (e) {
+        // Ignore storage restrictions
+      }
+    }
+
+    const begBtn = document.getElementById("levelBeginnerBtn");
+    const deepBtn = document.getElementById("levelDeepBtn");
+    if (begBtn) {
+      begBtn.classList.toggle("is-active", level === "beginner");
+      begBtn.setAttribute("aria-pressed", String(level === "beginner"));
+    }
+    if (deepBtn) {
+      deepBtn.classList.toggle("is-active", level === "deep");
+      deepBtn.setAttribute("aria-pressed", String(level === "deep"));
+    }
+
+    if (this.tokens && this.tokens.length) {
+      this.updateHeroVisualPipeline();
+      this.updateStoryConnectors();
+      this.renderAllStages();
+    }
   }
 
   setTheme(theme) {
@@ -292,7 +352,7 @@ class App {
 
   markStageExplored(stageNum) {
     const n = parseInt(stageNum, 10);
-    if (!n || n < 1 || n > 7) return;
+    if (!n || n < 1 || n > this.stageList.length) return;
     if (!this.exploredStages.has(n)) {
       this.exploredStages.add(n);
       this.updateExploredHUD();
@@ -300,14 +360,15 @@ class App {
   }
 
   updateExploredHUD() {
+    const total = this.stageList.length;
     const textEl = document.getElementById("sidebarExploredText");
     if (textEl) {
-      textEl.textContent = `${this.exploredStages.size} / 7`;
+      textEl.textContent = `${this.exploredStages.size} / ${total}`;
     }
     const dotsEl = document.getElementById("sidebarExploredDots");
     if (dotsEl) {
-      dotsEl.innerHTML = [1, 2, 3, 4, 5, 6, 7].map(n => `
-        <span class="explored-dot ${this.exploredStages.has(n) ? "is-done" : ""}" title="Stage ${n}"></span>
+      dotsEl.innerHTML = this.stageList.map(st => `
+        <span class="explored-dot ${this.exploredStages.has(st.id) ? "is-done" : ""}" title="Stage ${st.id}: ${st.title}"></span>
       `).join("");
     }
   }
@@ -481,6 +542,9 @@ class App {
     const focusVec = this.math.getTokenEmbedding(focusTok, this.hyperparams.d_model);
     const topPred = this.math.computeLayerSortedLogits(this.tokens, 12, VOCABULARY_LIST, this.hyperparams.d_model)[0];
 
+    const isBeginner = this.experienceLevel !== "deep";
+    const nextWord = this.escapeHtml(topPred ? topPred.token : "...");
+
     strip.innerHTML = `
       <button type="button" class="hero-flow-node" data-hero-step="1" onclick="window.app.setActiveStage(1)">
         <span class="hero-flow-head">
@@ -488,34 +552,34 @@ class App {
           <span class="hero-flow-step">1 · Tokenization</span>
         </span>
         <span class="hero-flow-visual mono">"${this.escapeHtml(focusTok.text)}" &rarr; #${focusTok.id}</span>
-        <span class="hero-flow-caption tabular-nums">${this.tokens.length} tokens (BPE)</span>
+        <span class="hero-flow-caption tabular-nums">${isBeginner ? `${this.tokens.length} word bricks` : `${this.tokens.length} tokens (BPE)`}</span>
       </button>
       <div class="hero-wire" aria-hidden="true"><span class="wire-packet"></span></div>
       <button type="button" class="hero-flow-node" data-hero-step="2" onclick="window.app.setActiveStage(2)">
         <span class="hero-flow-head">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2L3 7v10l9 5 9-5V7l-9-5z"/><path d="M12 22V12M12 12l9-5M12 12L3 7"/></svg>
-          <span class="hero-flow-step">2–3 · Embeddings + RoPE</span>
+          <span class="hero-flow-step">2–3 · Embeddings</span>
         </span>
-        <span class="hero-flow-visual mono">[${focusVec[0].toFixed(1)}, ${focusVec[1].toFixed(1)}]</span>
-        <span class="hero-flow-caption tabular-nums">${selectedIdx * 36}&deg; position</span>
+        <span class="hero-flow-visual ${isBeginner ? "" : "mono"}">${isBeginner ? "3D Meaning Map" : `[${focusVec[0].toFixed(1)}, ${focusVec[1].toFixed(1)}]`}</span>
+        <span class="hero-flow-caption tabular-nums">${isBeginner ? "+ Word Order (RoPE)" : `${selectedIdx * 36}° position`}</span>
       </button>
       <div class="hero-wire" aria-hidden="true"><span class="wire-packet delay-1"></span></div>
       <button type="button" class="hero-flow-node" data-hero-step="3" onclick="window.app.setActiveStage(4)">
         <span class="hero-flow-head">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="18" r="3"/><circle cx="12" cy="6" r="3"/><path d="M8 15.5L11 8.5M16 15.5L13 8.5"/></svg>
-          <span class="hero-flow-step">4–6 · Self-Attention &times;12</span>
+          <span class="hero-flow-step">4–6 · Self-Attention</span>
         </span>
-        <span class="hero-flow-visual">12 Layers</span>
-        <span class="hero-flow-caption">Block + Logits</span>
+        <span class="hero-flow-visual">${isBeginner ? "Connect Clues" : "12 Layers"}</span>
+        <span class="hero-flow-caption">${isBeginner ? "12 rounds of thinking" : "Block + Logits"}</span>
       </button>
       <div class="hero-wire" aria-hidden="true"><span class="wire-packet delay-2"></span></div>
       <button type="button" class="hero-flow-node is-accent" data-hero-step="4" onclick="window.app.setActiveStage(7)">
         <span class="hero-flow-head">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 4"/></svg>
-          <span class="hero-flow-step">7 · Softmax Sampling</span>
+          <span class="hero-flow-step">7–8 · Next Word</span>
         </span>
-        <span class="hero-flow-visual mono">"${this.escapeHtml(topPred ? topPred.token : "...")}"</span>
-        <span class="hero-flow-caption">Next token</span>
+        <span class="hero-flow-visual mono">"${nextWord}"</span>
+        <span class="hero-flow-caption">${isBeginner ? "Spin & measure surprise" : "Softmax + Perplexity"}</span>
       </button>
     `;
     if (this._heroPulseStep > 0) {
@@ -529,14 +593,16 @@ class App {
     const focusTok = this.tokens[selectedIdx] || this.tokens[0];
     const focusVec = this.math.getTokenEmbedding(focusTok, this.hyperparams.d_model);
     const wordEsc = this.escapeHtml(focusTok.text);
+    const isBeginner = this.experienceLevel !== "deep";
 
     const bridges = [
-      { id: "connector-1-2", chip: `"${wordEsc}" #${focusTok.id}`, text: "Embeddings" },
-      { id: "connector-2-3", chip: `[${focusVec[0].toFixed(1)}, ${focusVec[1].toFixed(1)}]`, text: "Positional Encoding (RoPE)" },
-      { id: "connector-3-4", chip: `#${selectedIdx + 1} · ${selectedIdx * 36}°`, text: "Self-Attention" },
-      { id: "connector-4-5", chip: `"${wordEsc}" + context`, text: "Transformer Block" },
-      { id: "connector-5-6", chip: "Layer 1 Done", text: "Layer Stack & Logits" },
-      { id: "connector-6-7", chip: "Logits Ready", text: "Softmax & Sampling" }
+      { id: "connector-1-2", chip: `"${wordEsc}" #${focusTok.id}`, text: isBeginner ? "Place it on the 3D Meaning Map" : "Embeddings" },
+      { id: "connector-2-3", chip: isBeginner ? "Meaning mapped" : `[${focusVec[0].toFixed(1)}, ${focusVec[1].toFixed(1)}]`, text: isBeginner ? "Tag its word order (RoPE)" : "Positional Encoding (RoPE)" },
+      { id: "connector-3-4", chip: `Seat #${selectedIdx + 1}`, text: isBeginner ? "Look back for clues (Self-Attention)" : "Self-Attention" },
+      { id: "connector-4-5", chip: `"${wordEsc}" + clues`, text: isBeginner ? "Clean & think (Transformer Block)" : "Transformer Block" },
+      { id: "connector-5-6", chip: "Round 1 done", text: isBeginner ? "Repeat 12 times (Layers & Logits)" : "Layer Stack & Logits" },
+      { id: "connector-6-7", chip: isBeginner ? "Word scores ready" : "Logits Ready", text: isBeginner ? "Spin the next word (Softmax)" : "Softmax & Sampling" },
+      { id: "connector-7-8", chip: isBeginner ? "Test a real AI" : "P(x_t | x_&lt;t)", text: isBeginner ? "Measure surprise (Perplexity)" : "Perplexity (DistilGPT-2)" }
     ];
 
     bridges.forEach((b, idx) => {
@@ -602,7 +668,7 @@ class App {
   }
 
   setActiveStage(stageNum) {
-    const clamped = Math.max(1, Math.min(7, stageNum));
+    const clamped = Math.max(1, Math.min(this.stageList.length, stageNum));
     this.activeStage = clamped;
     this.updateSidebarActiveState();
 
@@ -624,6 +690,10 @@ class App {
   renderStageById(stageNum) {
     const container = document.getElementById(`stage-${stageNum}`);
     if (!container) return;
+    if (stageNum === 8 && this.perplexityExplorer) {
+      this.perplexityExplorer.render(container);
+      return;
+    }
     const renderMethod = this.stagesRenderer[`renderStage${stageNum}`];
     if (renderMethod) {
       renderMethod.call(this.stagesRenderer, container);
@@ -631,7 +701,7 @@ class App {
   }
 
   renderAllStages() {
-    for (let i = 1; i <= 7; i++) {
+    for (let i = 1; i <= this.stageList.length; i++) {
       this.renderStageById(i);
     }
   }
@@ -807,7 +877,7 @@ function startApp() {
   if (!window.app) {
     try {
       window.app = new App();
-      console.log("Cortext visual story initialized.");
+      console.log("Unprompted initialized.");
     } catch (err) {
       console.error("Error initializing App:", err);
     }
